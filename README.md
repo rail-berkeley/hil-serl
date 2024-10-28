@@ -3,7 +3,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Static Badge](https://img.shields.io/badge/Project-Page-a)](https://hil-serl.github.io/)
 
-![](./docs/images/task-banner.gif)
+![](./docs/images/task_banner.gif)
 
 
 **Webpage: [https://hil-serl.github.io/](https://hil-serl.github.io/)**
