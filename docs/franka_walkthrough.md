@@ -3,7 +3,7 @@
 We demonstrate how to use HIL-SERL with real robot manipulators with 4 tasks featured in the paper: RAM insertion, USB pick up and insertion, object handover, and egg flip. These representative tasks were chosen to highlight the spectrum of use cases supported by our codebase, such as dual arm support (object handover), multi-stage reward tasks (USB pick up and insertion), and dynamic tasks (egg flip). We provide detailed instructions and tips for the entire training and evaluation pipeline for the RAM insertion task, so we suggest carefully reading through this as a starting point. 
 
 ## 1. RAM Insertion
-**TODO**: Add setup image
+![](./images/motherboard_setup.png)
 
 ### Procedure
 
@@ -85,16 +85,10 @@ Policy training is done asynchronously via an actor node, responsible for rollin
     ```
 
 ## 2. USB Pick Up and Insertion
-**TODO**: Add setup image
-
 Instructions to follow soon!
 
 ## 3. Object Handover
-**TODO**: Add setup image
-
 Instructions to follow soon!
 
 ## 4. Egg Flip
-**TODO**: Add setup image
-
 Instructions to follow soon!
