@@ -8,10 +8,9 @@
 
 **Webpage: [https://hil-serl.github.io/](https://hil-serl.github.io/)**
 
-HIL-SERL provides a set of libraries, env wrappers, and examples to train RL policies using a combination of demonstrations and human corrections to perform robotic manipulation tasks with near-perfect success rates.. The following sections describe how to use HIL-SERL. We will illustrate the usage with examples.
+HIL-SERL provides a set of libraries, env wrappers, and examples to train RL policies using a combination of demonstrations and human corrections to perform robotic manipulation tasks with near-perfect success rates. The following sections describe how to use HIL-SERL. We will illustrate the usage with examples.
 
-<!-- 🎬: [SERL video](https://www.youtube.com/watch?v=Um4CjBmHdcw), [additional video](https://www.youtube.com/watch?v=17NrtKHdPDw) on sample efficient RL. -->
-**TODO**: Update with HIL-SERL demo video.
+🎬: [HIL-SERL video](https://www.youtube.com/watch?v=GuD_-zhJgbs)
 
 **Table of Contents**
 - [HIL-SERL: Precise and Dexterous Robotic Manipulation via Human-in-the-Loop Reinforcement Learning](#serl-a-software-suite-for-sample-efficient-robotic-reinforcement-learning)
