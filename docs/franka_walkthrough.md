@@ -3,13 +3,11 @@
 We demonstrate how to use HIL-SERL with real robot manipulators with 4 tasks featured in the paper: RAM insertion, USB pick up and insertion, object handover, and egg flip. These representative tasks were chosen to highlight the spectrum of use cases supported by our codebase, such as dual arm support (object handover), multi-stage reward tasks (USB pick up and insertion), and dynamic tasks (egg flip). We provide detailed instructions and tips for the entire training and evaluation pipeline for the RAM insertion task, so we suggest carefully reading through this as a starting point. 
 
 ## 1. RAM Insertion
-![](./images/motherboard_setup.png)
 
 ### Procedure
 
 #### Robot Setup
-If you haven't already, read through the instructions for setting up the Python environment and installing our Franka controllers in [README.md](../README.md). The following steps will assume all installation steps there have been completed and the Python environment activated. To setup the workspace, you can refer the image of our workspace above.
-
+If you haven't already, read through the instructions for setting up the Python environment and installing our Franka controllers in [README.md](../README.md). The following steps will assume all installation steps there have been completed and the Python environment activated. To setup the workspace, you can refer to the image of our workspace setup in our paper.
 
 1. Adjust for the weight of the wrist cameras by editing `Desk > Settings > End-effector > Mechanical Data > Mass`.
 
@@ -30,7 +28,6 @@ For each task, we create a folder in the experiments folder to store data (i.e. 
     ```bash
     curl -X POST http://<FRANKA_SERVER_URL>:5000/getpos_euler
     ```
-
 
 #### Training Reward Classifier
 The reward for this task is given via a reward classifier trained on camera images. For this task, we use the same two wrist images used for training the policy to train the reward classifier. The following steps goes through collecting classifier data and training the reward classifier.
@@ -70,7 +67,7 @@ Policy training is done asynchronously via an actor node, responsible for rollin
 9. Inside the folder corresponding to the RAM insertion experiment ([experiments/ram_insertion](../examples/experiments/ram_insertion/)), you will find `run_actor.sh` and `run_learner.sh`. In both scripts, edit `checkpoint_path` to point to the folder where checkpoints and other data generated in the training process will be saved to and in `run_learner.sh`, edit `demo_path` to point to the path of the recorded demonstrations (if there are multiple demonstration files, you can provide multiple `demo_path` flags). To begin training, launch both nodes:
     ```bash
     bash run_actor.sh
-    bash run_learner.shs
+    bash run_learner.sh
     ```
 
     > **TIP**: To resume a previous training run, simply edit `checkpoint_path` to point to the folder corresponding to the previous run and the code will automatically load the latest checkpoint and training buffer data and resume training.
@@ -85,10 +82,80 @@ Policy training is done asynchronously via an actor node, responsible for rollin
     ```
 
 ## 2. USB Pick Up and Insertion
-Instructions to follow soon!
+
+### Procedure
+
+#### Robot Setup
+These steps assume you have completed all installation procedures have been completed and the Python environment is activated. To setup the workspace, you can refer to the image of our workspace setup in our paper.
+
+1. Adjust for the weight of the wrist cameras by editing `Desk > Settings > End-effector > Mechanical Data > Mass`.
+
+2. Unlock the robot and activate FCI in the Franka Desk. If you haven't done so already, you will need to edit the `franka_server` launch file (refer to step 2 in RAM Insertion instructions). To launch the server, run:
+   
+```bash
+bash serl_robot_infra/robot_servers/launch_right_server.sh
+```
+
+#### Editing Training Configuration
+Next, we need to edit the training configuration in [experiments/usb_pickup_insertion/config.py](../examples/experiments/usb_pickup_insertion/config.py)) to begin training:
+
+3. First, in the `EnvConfig` class, change `SERVER_URL` to the URL of the running Franka server.
+
+4. Next, we need to configure the cameras. For this task, we used 2 wrist cameras and 1 side cameras (with different crops for the policy and the classifier). Change the serial numbers in `REALSENSE_CAMERAS` to the serial numbers of the cameras in your setup (this can be found in the RealSense Viewer application) and adjust the image crops in `IMAGE_CROP`. To visualize the camera views, you can run the reward classifier data collection script or the demonstration data collection script.
+
+> **NOTE**: This config is an example of how to use multiple cropped views of the same camera. For each cropped view of the same camera, you will need to add an entry to `REALSENSE_CAMERAS` and `IMAGE_CROP`. Note that we avoid initializing the same camera more than once in the `init_cameras` function in `USBEnv` in [experiments/usb_pickup_insertion/wrapper.py](../examples/experiments/usb_pickup_insertion/wrapper.py))
+
+5. Finally, you will need to collect the `TARGET_POSE` which for this task, refers to the arm pose when grasping the USB while it is fully inserted in the port. Also, ensure that the bounding box is set for safe exploration (see `ABS_POSE_LIMIT_HIGH` and `ABS_POSE_LIMIT_LOW`). Note that `RESET_POSE` (pose the arm where move before dropping the USB during episode reset) is already defined and that `RANDOM_RESET` is enabled. To collect the current pose of the Franka arm, you can run:
+    ```bash
+    curl -X POST http://<FRANKA_SERVER_URL>:5000/getpos_euler
+    ```
+
+#### Training Reward Classifier
+For this task, we use a cropped view of the side camera to train the reward classifier. The following steps goes through collecting classifier data and training the reward classifier.
+
+6. First, we need to collect training data for the classifier. Navigate into the examples folder and run:
+    ```bash
+    cd examples
+    python record_success_fail.py --exp_name usb_pickup_insertion
+    ```
+    Refer to step 6 in the RAM Insertion instructions for more details on using this script. For this task, we found it helpful to collect negative transitions of the RAM stick held in various locations in the workplace, only partially-successful insertions, and successful insertions into the wrong USB port. The classifier data will be saved to the folder `experiments/usb_pickup_insertion/classifier_data`.
+
+7. To train the reward classifier, navigate to this task's experiment folder and run:
+    ```bash
+    cd experiments/usb_pickup_insertion
+    python ../../train_reward_classifier.py --exp_name usb_pickup_insertion
+    ```
+    The reward classifier will be trained on the camera images specified by the classifier keys in the training config. The trained classifier will be saved to the folder `experiments/usb_pickup_insertion/classifier_ckpt`.
+
+#### Recording Demonstrations
+A small number of human demonstrations is crucial to accelerating the reinforcement learning process, and for this task, we use 20 demonstrations. 
+
+8. To record the 20 demonstrations with the spacemouse, run:
+    ```bash
+    python ../../record_demos.py --exp_name usb_pickup_insertion --successes_needed 20
+    ```
+    Once the episode is deemed successful by the reward classifier or the episode times out, the robot will reset. This is also a good chance to verify the reward classifier and reset is working as intended. The script will terminate once 20 successful demonstrations have been collected, which will be saved to the folder `experiments/usb_pickup_insertion/demo_data`.
+
+#### Policy Training
+
+9. Inside the folder corresponding to the USB pickup and insertion experiment ([experiments/usb_pickup_insertion](../examples/experiments/usb_pickup_insertion/)), you will find `run_actor.sh` and `run_learner.sh`. In both scripts, edit `checkpoint_path` to point to the folder where checkpoints and other data generated in the training process will be saved to and in `run_learner.sh`, edit `demo_path` to point to the path of the recorded demonstrations (if there are multiple demonstration files, you can provide multiple `demo_path` flags). To begin training, launch both nodes:
+    ```bash
+    bash run_actor.sh
+    bash run_learner.sh
+    ```
+
+10. During training, you should give some interventions as necessary with the spacemouse to speed up the training run, particularly closer to the beginning of the run or when the policy is exploring an incorrect behavior repeatedly (i.e. moving the USB away from the motherboard). For reference, our policy took around 2.5 hours to converge to 100% success rate.
+
+11. To evaluate the trained policy, add the flags `--eval_checkpoint_step=CHECKPOINT_NUMBER_TO_EVAL` and `--eval_n_trajs=N_TIMES_TO_EVAL` to `run_actor.sh`. Then, launch the actor:
+    ```bash
+    bash run_actor.sh
+    ```
 
 ## 3. Object Handover
 Instructions to follow soon!
 
 ## 4. Egg Flip
 Instructions to follow soon!
+
+## Helpful Tips for Running Your Own Task
+To follow soon!
