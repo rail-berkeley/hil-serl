@@ -98,7 +98,7 @@ If you use this code for your research, please cite our paper:
       title={HIL-SERL: Precise and Dexterous Robotic Manipulation via Human-in-the-Loop Reinforcement Learning},
       author={Jianlan Luo and Charles Xu and Jeffrey Wu and Sergey Levine},
       year={2024},
-      eprint={TODO},
+      eprint={2410.21845},
       archivePrefix={arXiv},
       primaryClass={cs.RO}
 }
