@@ -35,7 +35,7 @@ HIL-SERL provides a set of libraries, env wrappers, and examples to train RL pol
 
     - For GPU:
         ```bash
-        pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+        pip install --upgrade "jax[cuda12_pip]==0.4.35" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
         ```
 
     - For TPU
