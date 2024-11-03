@@ -16,7 +16,7 @@ There is a Flask server which sends commands to the robot via ROS. There is a gy
 
 3. Then, install this package and it's dependencies.
     ```bash
-    conda activate serl
+    conda activate hilserl
     pip install -e .
     ```
 

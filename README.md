@@ -33,7 +33,7 @@ HIL-SERL provides a set of libraries, env wrappers, and examples to train RL pol
         pip install --upgrade "jax[cpu]"
         ```
 
-    - For GPU: (change cuda12 to cuda11 if you are using older driver versions)
+    - For GPU:
         ```bash
         pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
         ```

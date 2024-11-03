@@ -157,5 +157,13 @@ Instructions to follow soon!
 ## 4. Egg Flip
 Instructions to follow soon!
 
-## Helpful Tips for Running Your Own Task
-To follow soon!
+## Additional Tips for Success
+- Tips on giving human interventions
+    - First and foremost, use a spacemouse for interventions (something like a keyboard is much less precise)!
+    - Give interventions frequently at the beginning parts of training (this can be as frequent as intervening for some timesteps every episode
+    or every other episode). It's important to strike a balance between letting the policy explore (essential for RL) while also guiding it to explore efficiently through interventions. For instance, for an insertion task (i.e. RAM insertion), in the beginning of training, the policy will have a lot of random motion. We would typically let it explore these random motions for 20-30 timesteps then intervene to guide the object close to the insertion port, where we would let the policy practice the insertion. Alternating between exploration and interventions will give the policy opportunities to explore each portion of the task while also not wasting time exploring completely incorrect behaviors (i.e. exploring random motions at the edge of the bounding box far away from the insertion port). We also found it beneficial to intervene to help the policy finish the task and get the reward semi-frequently even in the beginning (i.e. letting 1/3 or more of the episodes get reward) - the frequent rewards will help the value backup propagate faster and speed up training
+    - As the policy starts to behave more reasonably (policy can successfully finish the task by itself with minimal/none interventions every once in a while), we can taper off the rate of interventions significantly. At this stage, we would mostly hold off on intervening unless the policy is repeatedly making the same mistake. 
+    - Sometimes, we may want the trained policy to have a more robust retry behavior (meaning the policy can successfully complete the task even if it makes a mistake earlier on) or to be more robust to external disturbances. In that case, we can also use interventions to help it practice these edge cases. For instance, if we want our USB pickup and insert policy to be robust against an edge case (i.e. still being able to successfully insert the USB after first dropping the USB close to the motherboard after an initial failed attempt), we can intervene to cause the policy to make this mistake and let it practice recovering from the mistake. Using interventions to bring the policy to a place to practice these recovery behaviors is effective for reaching 100% success rate as these mistakes may occur too infrequently otherwise yet the policy still needs to learn how to recover to improve from a 97% success rate policy to a 100% success rate policy.
+
+More to follow soon!
+
