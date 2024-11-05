@@ -45,8 +45,8 @@ The HTTP server is used to communicate between the ROS controller and gym enviro
 
 | Request | Description |
 | --- | --- |
-| startimp | Stop the impedance controller |
-| stopimp | Start the impedance controller |
+| startimp | Start the impedance controller |
+| stopimp | Stop the impedance controller |
 | pose | Command robot to go to desired end-effector pose given in base frame (xyz+quaternion) |
 | getpos | Return current end-effector pose in robot base frame (xyz+rpy)|
 | getvel | Return current end-effector velocity in robot base frame |
