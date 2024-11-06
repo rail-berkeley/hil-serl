@@ -397,7 +397,6 @@ class SACAgent(flax.struct.PyTreeNode):
             init_rng,
             actor=[observations],
             critic=[observations, actions],
-            value=[observations, actions[..., :-1],],
             temperature=[],
         )["params"]
 
