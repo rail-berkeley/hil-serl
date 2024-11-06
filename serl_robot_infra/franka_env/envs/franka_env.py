@@ -110,10 +110,10 @@ class FrankaEnv(gym.Env):
         self.hz = hz
         self.joint_reset_cycle = config.JOINT_RESET_PERIOD  # reset the robot joint every 200 cycles
 
-        if save_video:
-            print("Saving videos!")
         self.save_video = save_video
-        self.recording_frames = []
+        if self.save_video:
+            print("Saving videos!")
+            self.recording_frames = []
 
         # boundary box
         self.xyz_bounding_box = gym.spaces.Box(
@@ -276,7 +276,8 @@ class FrankaEnv(gym.Env):
                 return self.get_im()
 
         # Store full resolution cropped images separately
-        self.recording_frames.append(full_res_images)
+        if self.save_video:
+            self.recording_frames.append(full_res_images)
 
         if self.display_image:
             self.img_queue.put(display_images)

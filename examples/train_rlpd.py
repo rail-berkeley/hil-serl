@@ -45,6 +45,7 @@ flags.DEFINE_multi_string("demo_path", None, "Path to the demo data.")
 flags.DEFINE_string("checkpoint_path", None, "Path to save checkpoints.")
 flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint.")
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
+flags.DEFINE_boolean("save_video", False, "Save video.")
 
 flags.DEFINE_boolean(
     "debug", False, "Debug mode."
@@ -191,7 +192,6 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 rewards=reward,
                 masks=1.0 - done,
                 dones=done,
-                intervened=already_intervened,
             )
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
@@ -370,7 +370,7 @@ def main(_):
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     env = config.get_environment(
         fake_env=FLAGS.learner,
-        save_video=FLAGS.eval_checkpoint_step,
+        save_video=FLAGS.save_video,
         classifier=True,
     )
     env = RecordEpisodeStatistics(env)
@@ -454,8 +454,8 @@ def main(_):
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
         )
-        assert FLAGS.demo_path is not None
 
+        assert FLAGS.demo_path is not None
         for path in FLAGS.demo_path:
             with open(path, "rb") as f:
                 transitions = pkl.load(f)
