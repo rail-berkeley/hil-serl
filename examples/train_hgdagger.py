@@ -87,7 +87,7 @@ def actor(agent: BCAgent, data_store, env, sampling_rng):
         time_list = []
 
         ckpt = checkpoints.restore_checkpoint(
-            FLAGS.checkpoint_path,
+            os.path.abspath(FLAGS.checkpoint_path),
             agent.state,
             step=FLAGS.eval_checkpoint_step,
         )
@@ -279,7 +279,7 @@ def learner(rng, agent: BCAgent, demo_buffer, wandb_logger=None):
                 f"BC checkpoint at {FLAGS.pretrain_steps} steps found, restoring BC checkpoint"
             )
             ckpt = checkpoints.restore_checkpoint(
-                FLAGS.checkpoint_path, agent.state, step=FLAGS.pretrain_steps
+                os.path.abspath(FLAGS.checkpoint_path), agent.state, step=FLAGS.pretrain_steps
             )
             agent = agent.replace(state=ckpt)
             update_step = FLAGS.pretrain_steps
@@ -299,7 +299,7 @@ def learner(rng, agent: BCAgent, demo_buffer, wandb_logger=None):
                 if update_step % config.log_period == 0 and wandb_logger:
                     wandb_logger.log({"bc": bc_update_info}, step=update_step)
             checkpoints.save_checkpoint(
-                FLAGS.checkpoint_path, agent.state, step=update_step, keep=20
+                os.path.abspath(FLAGS.checkpoint_path), agent.state, step=update_step, keep=20
             )
             print_green("bc pretraining done and saved checkpoint")
 
@@ -327,7 +327,7 @@ def learner(rng, agent: BCAgent, demo_buffer, wandb_logger=None):
 
         if step > 0 and config.checkpoint_period and step % config.checkpoint_period == 0:
             checkpoints.save_checkpoint(
-                FLAGS.checkpoint_path, agent.state, step=step, keep=100
+                os.path.abspath(FLAGS.checkpoint_path), agent.state, step=step, keep=100
             )
 
 

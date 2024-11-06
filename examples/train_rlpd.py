@@ -72,7 +72,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         time_list = []
 
         ckpt = checkpoints.restore_checkpoint(
-            FLAGS.checkpoint_path,
+            os.path.abspath(FLAGS.checkpoint_path),
             agent.state,
             step=FLAGS.eval_checkpoint_step,
         )
@@ -247,7 +247,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     The learner loop, which runs when "--learner" is set to True.
     """
     start_step = (
-        int(os.path.basename(checkpoints.latest_checkpoint(FLAGS.checkpoint_path))[11:])
+        int(os.path.basename(checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path)))[11:])
         + 1
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
         else 0
@@ -351,7 +351,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             and step % config.checkpoint_period == 0
         ):
             checkpoints.save_checkpoint(
-                FLAGS.checkpoint_path, agent.state, step=step, keep=100
+                os.path.abspath(FLAGS.checkpoint_path), agent.state, step=step, keep=100
             )
 
 
@@ -419,12 +419,12 @@ def main(_):
     if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
         input("Checkpoint path already exists. Press Enter to resume training.")
         ckpt = checkpoints.restore_checkpoint(
-            FLAGS.checkpoint_path,
+            os.path.abspath(FLAGS.checkpoint_path),
             agent.state,
         )
         agent = agent.replace(state=ckpt)
         ckpt_number = os.path.basename(
-            checkpoints.latest_checkpoint(FLAGS.checkpoint_path)
+            checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path))
         )[11:]
         print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
 
