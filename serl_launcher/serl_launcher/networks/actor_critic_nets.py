@@ -7,9 +7,9 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from serl_launcher.common.common import default_init
-from serl_launcher.networks.mlp import MLP
-from serl_launcher.utils.jax_utils import next_rng
+from monopi.serl.serl.common.common import default_init
+from monopi.serl.serl.networks.mlp import MLP
+from monopi.serl.serl.utils.jax_utils import next_rng
 
 
 class ValueCritic(nn.Module):
@@ -19,7 +19,7 @@ class ValueCritic(nn.Module):
 
     @nn.compact
     def __call__(self, observations: jnp.ndarray, train: bool = False) -> jnp.ndarray:
-        outputs = self.network(self.encoder(observations), train=train)
+        outputs = self.network(self.encoder(observations), train)
         if self.init_final is not None:
             value = nn.Dense(
                 1,
@@ -32,15 +32,15 @@ class ValueCritic(nn.Module):
 
 def multiple_action_q_function(forward):
     # Forward the q function with multiple actions on each state, to be used as a decorator
-    def wrapped(self, observations, actions, **kwargs):
+    def wrapped(self, observations, actions, train=False):
         if jnp.ndim(actions) == 3:
             q_values = jax.vmap(
-                lambda a: forward(self, observations, a, **kwargs),
+                lambda a: forward(self, observations, a, train),
                 in_axes=1,
                 out_axes=-1,
             )(actions)
         else:
-            q_values = forward(self, observations, actions, **kwargs)
+            q_values = forward(self, observations, actions, train)
         return q_values
 
     return wrapped
@@ -62,7 +62,7 @@ class Critic(nn.Module):
             obs_enc = self.encoder(observations)
 
         inputs = jnp.concatenate([obs_enc, actions], -1)
-        outputs = self.network(inputs, train=train)
+        outputs = self.network(inputs, train)
         if self.init_final is not None:
             value = nn.Dense(
                 1,
@@ -90,7 +90,7 @@ class GraspCritic(nn.Module):
         else:
             obs_enc = self.encoder(observations)
         
-        outputs = self.network(obs_enc, train=train)
+        outputs = self.network(obs_enc, train)
         if self.init_final is not None:
             value = nn.Dense(
                 self.output_dim,
@@ -102,15 +102,22 @@ class GraspCritic(nn.Module):
 
 
 def ensemblize(cls, num_qs, out_axes=0):
-    return nn.vmap(
-        cls,
-        variable_axes={"params": 0},
-        split_rngs={"params": True},
-        in_axes=None,
-        out_axes=out_axes,
-        axis_size=num_qs,
-    )
+    class EnsembleModule(nn.Module):
+        @nn.compact
+        def __call__(self, *args, train=False, **kwargs):
+            # Create a vmapped version of the class without using kwargs
+            ensemble = nn.vmap(
+                cls,
+                variable_axes={"params": 0},
+                split_rngs={"params": True, "dropout": True},  # Include 'dropout' if needed
+                in_axes=None,
+                out_axes=out_axes,
+                axis_size=num_qs,
+            )
+            # Forward pass with 'train' as a positional argument
+            return ensemble()(*args, **kwargs)
 
+    return EnsembleModule
 
 class Policy(nn.Module):
     encoder: Optional[nn.Module]
