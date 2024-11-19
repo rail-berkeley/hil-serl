@@ -114,8 +114,12 @@ class BCAgent(flax.struct.PyTreeNode):
             name="actor",
         )
         pi_actions = dist.mode()
-        log_probs = dist.log_prob(batch["actions"])
-        mse = ((pi_actions - batch["actions"]) ** 2).sum(-1)
+        if self.config["tanh_squash_distribution"]:
+            batch_actions = jnp.clip(batch["actions"], -1+1e-6, 1-1e-6)
+        else:
+            batch_actions = batch["actions"]
+        log_probs = dist.log_prob(batch_actions)
+        mse = ((pi_actions - batch_actions) ** 2).sum(-1)
 
         return {
             "mse": mse,
