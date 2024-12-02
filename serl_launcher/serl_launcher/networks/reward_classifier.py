@@ -6,7 +6,9 @@ from flax.training.train_state import TrainState
 from flax.training import checkpoints
 import optax
 from typing import Callable, Dict, List
-
+import requests
+import os
+from tqdm import tqdm
 
 from serl_launcher.vision.resnet_v1 import resnetv1_configs, PreTrainedResNetEncoder
 from serl_launcher.common.encoding import EncodingWrapper
