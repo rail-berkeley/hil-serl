@@ -1,0 +1,46 @@
+cartesian_wrench_controller:
+    type: egg_flip_controller/CartesianWrenchController
+    arm_id: panda
+    joint_names:
+        - panda_joint1
+        - panda_joint2
+        - panda_joint3
+        - panda_joint4
+        - panda_joint5
+        - panda_joint6
+        - panda_joint7
+    max_duration_between_commands: 0.1
+    rate_limiting:
+        force: 20.0
+        torque: 5.0
+    bounding_box:
+        min_translation: [0.4, -0.08, 0.45]
+        max_translation: [0.7, 0.08, 0.6]
+        min_rotation: [2.1, -2.7, -0.9] # -M_PI / 4
+        max_rotation: [2.4, -1.5, -0.7]    # M_PI / 4
+    p_translation: 200.0
+    p_rotation: 50
+    k_gains:
+        - 600.0
+        - 600.0
+        - 600.0
+        - 600.0
+        - 250.0
+        - 150.0
+        - 50.0
+    d_gains:
+        - 50.0
+        - 50.0
+        - 50.0
+        - 20.0
+        - 20.0
+        - 20.0
+        - 10.0
+    target_joint_positions:
+        - 0.0
+        - -0.3
+        - 0.0
+        - -2.1
+        - 0.0
+        - 1.6
+        - 0.8
