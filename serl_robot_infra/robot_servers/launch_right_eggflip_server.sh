@@ -1,5 +1,5 @@
 # Source the setup.bash file for the second ROS workspace
-source /home/panda/code/fr3_ws/devel/setup.bash
+source /home/undergrad/code/catkin_ws/devel/setup.bash
 
 # Change the ROS master URI to a different port
 export ROS_MASTER_URI=http://localhost:11511
