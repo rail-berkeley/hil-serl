@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<launch>
+  <arg name="robot_ip" />
+  <arg name="load_gripper" default="true" />
+  <include file="$(find franka_control)/launch/franka_control.launch" >
+    <arg name="robot_ip" value="$(arg robot_ip)" />
+    <arg name="load_gripper" value="$(arg load_gripper)" />
+  </include>
+
+  <rosparam command="load" file="$(find egg_flip_controller)/config/egg_flip_controller.yaml" />
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="true" output="screen" args="cartesian_wrench_controller"/>
+</launch>
