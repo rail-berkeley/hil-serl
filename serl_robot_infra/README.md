@@ -83,3 +83,36 @@ curl -X POST <flask_url>:5000/jointreset # Perform joint reset
 curl -X POST <flask_url>:5000/stopimp # Stop the impedance controller
 curl -X POST <flask_url>:5000/startimp # Start the impedance controller (**Only run this after stopimp**)
 ```
+
+## Egg Flip Controller
+This is only a very naive wrench based controller that we implemented for the egg flip task specifically. We are release it only for reference and those really interested in seeing how we did the dynamic tasks. 
+
+<span style="color: red">
+DISCLAIMER: DO NOT use this unless you know what you are doing and accept the risk of damaging the robot. However, if you do decide to run this, make sure there is clear space in front, below, and above the robot as launching the server will cause the robot to move into the reset position.</span>
+
+
+### Installation
+1. Complete all of the steps above to install  `serl_robot_controllers`.
+2. Copy the `egg_flip_controller` directory into your `catkin_ws/src` directory.
+3. Build this pacakge
+    ```bash
+    catkin_make --pkg egg_flip_controller
+    ```
+4. Launch the egg flip server
+    ```bash
+    cd robot_servers
+    conda activate hilserl
+
+    # source the catkin_ws that contains the serl_franka_controllers package
+    source </path/to/catkin_ws>/devel/setup.bash
+
+    # Set ROS master URI to localhost
+    export ROS_MASTER_URI=http://localhost:<ros_port_number>
+
+    # script to start http server and ros controller
+    python franka_server.py \
+        --gripper_type=None \
+        --robot_ip=<robot_IP> \
+        --flask_url=<url_to_serve> \
+        --ros_port=<ros_port_number> \
+    ```

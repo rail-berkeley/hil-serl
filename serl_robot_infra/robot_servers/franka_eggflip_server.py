@@ -32,7 +32,7 @@ flags.DEFINE_string("flask_url",
 flags.DEFINE_string("ros_port", "11311", "Port for the ROS master to run on.")
 
 
-class FrankaServer:
+class FrankaEggFlipServer:
     """Handles the starting and stopping of the wrench controller
     (as well as backup) joint recovery policy."""
 
@@ -126,7 +126,15 @@ class FrankaServer:
 
 
 def main(_):
-    ROS_PKG_NAME = "serl_franka_controllers"
+    print("\033[91mHave  you read the instructions and understood the risks of running this example controller?\033[0m")
+    response = input("Enter 'yes' to continue: ")
+    if response != "yes":
+        return
+    print("\033[91mIs there clear space in front, below, and above the robot?\033[0m")
+    response = input("Enter 'yes' to continue: ")
+    if response != "yes":
+        return    
+    ROS_PKG_NAME = "egg_flip_controller"
 
     ROBOT_IP = FLAGS.robot_ip
     GRIPPER_IP = FLAGS.gripper_ip
@@ -157,7 +165,7 @@ def main(_):
         raise NotImplementedError("Gripper Type Not Implemented")
 
     """Starts wrench controller"""
-    robot_server = FrankaServer(
+    robot_server = FrankaEggFlipServer(
         robot_ip=ROBOT_IP,
         gripper_type=GRIPPER_TYPE,
         ros_pkg_name=ROS_PKG_NAME,

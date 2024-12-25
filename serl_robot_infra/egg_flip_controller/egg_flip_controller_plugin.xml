@@ -1,0 +1,7 @@
+<library path="lib/libegg_flip_controller">
+    <class name="egg_flip_controller/CartesianWrenchController" type="egg_flip_controller::CartesianWrenchController" base_class_type="controller_interface::ControllerBase">
+    <description>
+      Cartesian wrench controller where the target wrench can be set online.
+    </description>
+  </class>
+</library>
