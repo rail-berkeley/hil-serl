@@ -189,7 +189,7 @@ class GripperCloseEnv(gym.ActionWrapper):
         self.action_space = Box(ub.low[:6], ub.high[:6])
 
     def action(self, action: np.ndarray) -> np.ndarray:
-        new_action = np.zeros((7,), dtype=np.float32)
+        new_action = np.full((7,), -1.0, dtype=np.float32)
         new_action[:6] = action.copy()
         return new_action
 
