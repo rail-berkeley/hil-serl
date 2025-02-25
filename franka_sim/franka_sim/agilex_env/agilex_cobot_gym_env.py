@@ -19,6 +19,7 @@ from franka_sim.mujoco_gym_env import GymRenderingSpec, MujocoGymEnv
 _HERE = Path(__file__).parent
 _XML_PATH = _HERE / "cobot_magic.xml"
 _PANDA_HOME = np.asarray((0, -0.785, 0, -2.35, 0, 1.57))
+GRIPPER_OPEN = np.asanyarray((0.02, -0.02))
 _CARTESIAN_BOUNDS = np.asarray([[0.2, -0.3, 0], [0.6, 0.3, 0.5]])
 _SAMPLING_BOUNDS = np.asarray([[0.25, -0.25], [0.55, 0.25]])
 
@@ -59,18 +60,22 @@ class AgilexCobotGymEnv(MujocoGymEnv):
         }
 
         self.render_mode = render_mode
-        self.camera_id = (0, 1)
+        self.camera_id = (0, 1, 2)
         self.image_obs = image_obs
 
         # Caching.
         self._left_dof_ids = np.asarray(
             [self._model.joint(f"fl_joint{i}").id for i in range(1, 7)]
         )
-        print(self._left_dof_ids)
         self._right_dof_ids = np.asarray(
             [self._model.joint(f"fr_joint{i}").id for i in range(1, 7)]
         )
-        print(self._right_dof_ids)
+        self._left_gripper_dof_ids = np.asarray(
+            [self._model.joint(f"fl_joint{i}").id for i in range(7, 9)]
+        )
+        self._right_gripper_dof_ids = np.asarray(
+            [self._model.joint(f"fr_joint{i}").id for i in range(7, 9)]
+        )
         self._left_ctrl_ids = np.asarray(
             [self._model.actuator(f"fl_joint{i}").id for i in range(1, 7)]
         )
@@ -142,11 +147,15 @@ class AgilexCobotGymEnv(MujocoGymEnv):
         mujoco.mj_resetData(self._model, self._data)
 
         # Reset arm to home position.
+        print(f"left_dof {self._left_dof_ids}")
+        print(f"right_dof {self._right_dof_ids}")
         self._data.qpos[self._left_dof_ids] = _PANDA_HOME
         self._data.qpos[self._right_dof_ids] = _PANDA_HOME
+        self._data.qpos[self._left_gripper_dof_ids] = GRIPPER_OPEN
+        self._data.qpos[self._right_gripper_dof_ids] = GRIPPER_OPEN
         mujoco.mj_forward(self._model, self._data)
 
-        # Reset mocap body to home position.
+        # Reset mocap body to home position. useless?
         tcp_pos = self._data.sensor("left_pinch_pos").data
         self._data.mocap_pos[0] = tcp_pos
 
@@ -229,19 +238,21 @@ class AgilexCobotGymEnv(MujocoGymEnv):
         obs = {}
         obs["state"] = {}
 
-        tcp_pos = self._data.sensor("left_pinch_pos").data
-        obs["state"]["left/pos"] = tcp_pos.astype(np.float32)
-        obs["state"]["right/pos"] = tcp_pos.astype(np.float32)
+        left_pos = self._data.sensor("left_pinch_pos").data
+        right_pos = self._data.sensor("right_pinch_pos").data
+        obs["state"]["left/pos"] = left_pos.astype(np.float32)
+        obs["state"]["right/pos"] = right_pos.astype(np.float32)
 
-        tcp_vel = self._data.sensor("left_pinch_vel").data
-        obs["state"]["left/vel"] = tcp_vel.astype(np.float32)
-        obs["state"]["right/vel"] = tcp_vel.astype(np.float32)
+        left_vel = self._data.sensor("left_pinch_vel").data
+        right_vel = self._data.sensor("right_pinch_vel").data
+        obs["state"]["left/vel"] = left_vel.astype(np.float32)
+        obs["state"]["right/vel"] = right_vel.astype(np.float32)
 
         left_gripper_pos = np.array(
-            self._data.ctrl[self._left_gripper_ctrl_id[0]] / 255, dtype=np.float32
+            sum(self._data.ctrl[self._right_gripper_ctrl_id]) / len(self._right_gripper_ctrl_id) / 255, dtype=np.float32
         )
         right_gripper_pos = np.array(
-            self._data.ctrl[self._right_gripper_ctrl_id[0]] / 255, dtype=np.float32
+            sum(self._data.ctrl[self._right_gripper_ctrl_id]) / len(self._right_gripper_ctrl_id) / 255, dtype=np.float32
         )
         obs["state"]["left/gripper_pos"] = left_gripper_pos
         obs["state"]["right/gripper_pos"] = right_gripper_pos
@@ -266,8 +277,9 @@ class AgilexCobotGymEnv(MujocoGymEnv):
 
         if self.image_obs:
             obs["images"] = {}
-            obs["images"]["left/front"], obs["images"]["left/wrist"] = self.render()
-            obs["images"]["right/front"], obs["images"]["right/wrist"] = self.render()
+            images = self.render()
+            obs["images"]["left/front"], obs["images"]["left/wrist"] = images[0], images[1]
+            obs["images"]["right/front"], obs["images"]["right/wrist"] = images[0], images[2]
         else:
             block_pos = self._data.sensor("block_pos").data.astype(np.float32)
             obs["state"]["block_pos"] = block_pos
