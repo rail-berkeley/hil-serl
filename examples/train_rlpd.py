@@ -114,7 +114,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
         else 0
     )
-
+    print(f"start step {start_step}")
     datastore_dict = {
         "actor_env": data_store,
         "actor_env_intvn": intvn_data_store,
@@ -195,6 +195,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             )
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
+            else:
+                print_green("no grasp_penalty")
             data_store.insert(transition)
             transitions.append(copy.deepcopy(transition))
             if already_intervened:
@@ -212,8 +214,13 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 intervention_count = 0
                 intervention_steps = 0
                 already_intervened = False
-                client.update()
+                print_green("update client")
+                res = client.update()
+                print_green(f"finish update client, res {res}")
                 obs, _ = env.reset()
+        flag_render = True
+        if flag_render:
+            env.render()
 
         if step > 0 and config.buffer_period > 0 and step % config.buffer_period == 0:
             # dump to pickle file
@@ -253,7 +260,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         else 0
     )
     step = start_step
-
+    print("run before callback")
     def stats_callback(type: str, payload: dict) -> dict:
         """Callback for when server receives stats request."""
         assert type == "send-stats", f"Invalid request type: {type}"
@@ -268,6 +275,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     server.start(threaded=True)
 
     # Loop to wait until replay_buffer is filled
+    print_green("run here")
     pbar = tqdm.tqdm(
         total=config.training_starts,
         initial=len(replay_buffer),
@@ -277,6 +285,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     )
     while len(replay_buffer) < config.training_starts:
         pbar.update(len(replay_buffer) - pbar.n)  # Update progress bar
+        print("waitting for replay buffer")
         time.sleep(1)
     pbar.update(len(replay_buffer) - pbar.n)  # Update progress bar
     pbar.close()
@@ -303,14 +312,14 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
 
     # wait till the replay buffer is filled with enough data
     timer = Timer()
-    
+
     if isinstance(agent, SACAgent):
         train_critic_networks_to_update = frozenset({"critic"})
         train_networks_to_update = frozenset({"critic", "actor", "temperature"})
     else:
         train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
         train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
-
+    print_green(f"buffer size before step {len(replay_buffer)}")
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
@@ -318,9 +327,11 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         # This makes training on GPU faster by reducing the large batch transfer time from CPU to GPU
         for critic_step in range(config.cta_ratio - 1):
             with timer.context("sample_replay_buffer"):
+                print_green(f"critic step buffer size {len(replay_buffer)}")
                 batch = next(replay_iterator)
-                demo_batch = next(demo_iterator)
-                batch = concat_batches(batch, demo_batch, axis=0)
+                print(f"batach size {len(batch)}")
+                #demo_batch = next(demo_iterator)
+                #batch = concat_batches(batch, demo_batch, axis=0)
 
             with timer.context("train_critics"):
                 agent, critics_info = agent.update(
@@ -329,13 +340,18 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
                 )
 
         with timer.context("train"):
+            print_green(f"agent update buffer size {len(replay_buffer)}")
             batch = next(replay_iterator)
-            demo_batch = next(demo_iterator)
-            batch = concat_batches(batch, demo_batch, axis=0)
+            print("get batch")
+            #demo_batch = next(demo_iterator)
+            #batch = concat_batches(batch, demo_batch, axis=0)
+            print("before update")
             agent, update_info = agent.update(
                 batch,
                 networks_to_update=train_networks_to_update,
             )
+            print("after update")
+        print_green(f"after agent update buffer size {len(replay_buffer)}")
         # publish the updated network
         if step > 0 and step % (config.steps_per_update) == 0:
             agent = jax.block_until_ready(agent)
@@ -415,6 +431,7 @@ def main(_):
     agent = jax.device_put(
         jax.tree_map(jnp.array, agent), sharding.replicate()
     )
+    include_grasp_penalty = False
 
     if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
         input("Checkpoint path already exists. Press Enter to resume training.")
@@ -455,14 +472,15 @@ def main(_):
             include_grasp_penalty=include_grasp_penalty,
         )
 
-        assert FLAGS.demo_path is not None
-        for path in FLAGS.demo_path:
-            with open(path, "rb") as f:
-                transitions = pkl.load(f)
-                for transition in transitions:
-                    if 'infos' in transition and 'grasp_penalty' in transition['infos']:
-                        transition['grasp_penalty'] = transition['infos']['grasp_penalty']
-                    demo_buffer.insert(transition)
+        #assert FLAGS.demo_path is not None
+        if FLAGS.demo_path is not None:
+            for path in FLAGS.demo_path:
+                with open(path, "rb") as f:
+                    transitions = pkl.load(f)
+                    for transition in transitions:
+                        if 'infos' in transition and 'grasp_penalty' in transition['infos']:
+                            transition['grasp_penalty'] = transition['infos']['grasp_penalty']
+                            demo_buffer.insert(transition)
         print_green(f"demo buffer size: {len(demo_buffer)}")
         print_green(f"online buffer size: {len(replay_buffer)}")
 

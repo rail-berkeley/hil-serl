@@ -1,0 +1,7 @@
+dm_env
+mujoco==2.3.7
+gym >= 0.26
+gymnasium < 1.0.0
+dm-robotics-transformations
+imageio[ffmpeg]
+lxml

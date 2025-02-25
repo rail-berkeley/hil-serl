@@ -32,7 +32,7 @@ def main(_):
     config = CONFIG_MAPPING[FLAGS.exp_name]()
     env = config.get_environment(fake_env=False, save_video=False, classifier=False)
 
-    obs, _ = env.reset()
+    obs, _ = env.reset()  # obs: currpos, currvel, curr_gripper_pos, currforce, currtorque
     successes = []
     failures = []
     success_needed = FLAGS.successes_needed
