@@ -171,26 +171,26 @@ class AgilexEnv(gym.Env):
             self.displayer = ImageDisplayer(self.img_queue, self.url)
             self.displayer.start()
 
-        if not fake_env:
-            from pynput import keyboard
-            self.terminate = False
-            def on_press(key):
-                if key == keyboard.Key.esc:
-                    self.terminate = True
-            self.listener = keyboard.Listener(on_press=on_press)
-            self.listener.start()
+        #if not fake_env:
+        #    from pynput import keyboard
+        #    self.terminate = False
+        #    def on_press(key):
+        #        if key == keyboard.Key.esc:
+        #            self.terminate = True
+        #    self.listener = keyboard.Listener(on_press=on_press)
+        #    self.listener.start()
 
         print("Initialized Franka")
 
     def init_pub_sub_node(self):
         print("Init node")
-        self.joint_pub = rospy.Publisher(self.topic_prefix + '/joint_states', JointState, self.update_curr_joint)
-        self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_euler', Pose, self.update_curr_pos)
+        rospy.init_node('hilserl_agilex_env', anonymous=True)
+        self.joint_sub = rospy.Subscriber(self.topic_prefix + '/joint_states', JointState, self.update_curr_joint)
+        self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_euler', Pose, self.update_curr_end_pos)
         self.gripper_state_sub = rospy.Subscriber(f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state)
         self.cameras_subscrib = {}
         for key in self.config.CAMERAS:
-            self.cameras_subscrib[key] = rospy.Subscriber(f"{self.topic_prefix}/{key}/color/image_raw", partial(self.img_callback, key), queue_size=1000, tcp_nodelay=True)
-        self.wrist_camer_sub = 
+            self.cameras_subscrib[key] = rospy.Subscriber(f"{self.topic_prefix}/{key}/color/image_raw",Image, partial(self.img_callback, key=key), queue_size=1000, tcp_nodelay=True)
         self.end_pose_pub = rospy.Publisher(
             self.topic_prefix + "/control_pose", Pose, queue_size=1
         )
@@ -204,6 +204,9 @@ class AgilexEnv(gym.Env):
 
     def update_curr_end_pos(self, pos_cmd):
         self.curr_joint = np.ndarray(6)
+
+    def update_gripper_state(self, gripper_state):
+        print(f"get gripper val {gripper_state}")
 
     def img_callback(self, image, key):
         self.wrist_img[key].append(image)

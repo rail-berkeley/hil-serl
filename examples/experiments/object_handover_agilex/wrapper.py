@@ -3,22 +3,156 @@ import threading
 import time
 from typing import OrderedDict
 
-from franka_env.utils.rotations import euler_2_quat
+#from franka_env.utils.rotations import euler_2_quat
 import gymnasium as gym
 import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 from agilex_env.agilex_env import AgilexEnv
+from agilex_env.agilex_env import DefaultEnvConfig
 
-class DualFrankaEnv(AgilexEnv):
+class LeftEnvConfig(DefaultEnvConfig):
+    SERVER_URL = "http://127.0.0.1:5000/"
+    REALSENSE_CAMERAS = {
+        "wrist": {
+            "serial_number": "128422272758",
+            "dim": (1280, 720),
+            "exposure": 10000,
+        },
+        "side": {
+            "serial_number": "130322274175",
+            "dim": (1280, 720),
+            "exposure": 10000,
+        },
+        "side_classifier": {}
+    }
+    IMAGE_CROP = {
+        "wrist": lambda img: img[:, 250:],
+        "side": lambda img: img[100:500, 150:1100],
+        "side_classifier": lambda img: img[230:358, 800:1056],
+    }
+    RESET_POSE = np.array([0.6, -0.02, 0.42, np.pi, 0, 0])
+    ABS_POSE_LIMIT_LOW = np.array([0.4, -0.03, 0.3, np.pi-0.01, -0.3, 0])
+    ABS_POSE_LIMIT_HIGH = np.array([0.67, -0.01, 0.42, np.pi+0.01, 0.0, 0.01])
+    RANDOM_RESET = False
+    ACTION_SCALE = (0.04, 0.2, 1)
+    DISPLAY_IMAGE = False
+    MAX_EPISODE_LENGTH = 200
+    GRIPPER_SLEEP = 1.0
+    COMPLIANCE_PARAM = {
+        "translational_stiffness": 2000,
+        "translational_damping": 89,
+        "rotational_stiffness": 120,
+        "rotational_damping": 5,
+        "translational_Ki": 0,
+        "translational_clip_x": 0.0085,
+        "translational_clip_y": 0.005,
+        "translational_clip_z": 0.005,
+        "translational_clip_neg_x": 0.01,
+        "translational_clip_neg_y": 0.005,
+        "translational_clip_neg_z": 0.006,
+        "rotational_clip_x": 0.02,
+        "rotational_clip_y": 0.03,
+        "rotational_clip_z": 0.02,
+        "rotational_clip_neg_x": 0.02,
+        "rotational_clip_neg_y": 0.03,
+        "rotational_clip_neg_z": 0.02,
+        "rotational_Ki": 0,
+    }
+    PRECISION_PARAM = {
+        "translational_stiffness": 2000,
+        "translational_damping": 89,
+        "rotational_stiffness": 120,
+        "rotational_damping": 5,
+        "translational_Ki": 0,
+        "translational_clip_x": 0.01,
+        "translational_clip_y": 0.01,
+        "translational_clip_z": 0.01,
+        "translational_clip_neg_x": 0.01,
+        "translational_clip_neg_y": 0.01,
+        "translational_clip_neg_z": 0.01,
+        "rotational_clip_x": 0.04,
+        "rotational_clip_y": 0.04,
+        "rotational_clip_z": 0.04,
+        "rotational_clip_neg_x": 0.04,
+        "rotational_clip_neg_y": 0.04,
+        "rotational_clip_neg_z": 0.04,
+        "rotational_Ki": 0,
+    }
+
+
+class RightEnvConfig(DefaultEnvConfig):
+    SERVER_URL = "http://127.0.0.2:5000/"
+    REALSENSE_CAMERAS = {
+        "wrist": {
+            "serial_number": "127122270146",
+            "dim": (1280, 720),
+            "exposure": 10000,
+        },
+    }
+    IMAGE_CROP = {
+        "wrist": lambda img: img[::-1, ::-1][:, :900],
+    }
+    RESET_POSE = np.array([0.4, 0.0, 0.5, np.pi, 0, np.pi])
+    ABS_POSE_LIMIT_LOW = np.array([0.32, -0.01, 0.36, np.pi-0.01, 0.0, np.pi-0.01])
+    ABS_POSE_LIMIT_HIGH = np.array([0.67, 0.01, 0.5, np.pi+0.01, 0.3, np.pi+0.01])
+    RANDOM_RESET = False
+    ACTION_SCALE = (0.04, 0.2, 1)
+    DISPLAY_IMAGE = False
+    MAX_EPISODE_LENGTH = 200
+
+    GRIPPER_SLEEP = 1.0
+    COMPLIANCE_PARAM = {
+        "translational_stiffness": 2000,
+        "translational_damping": 89,
+        "rotational_stiffness": 120,
+        "rotational_damping": 5,
+        "translational_Ki": 0,
+        "translational_clip_x": 0.0085,
+        "translational_clip_y": 0.005,
+        "translational_clip_z": 0.005,
+        "translational_clip_neg_x": 0.007,
+        "translational_clip_neg_y": 0.005,
+        "translational_clip_neg_z": 0.006,
+        "rotational_clip_x": 0.02,
+        "rotational_clip_y": 0.03,
+        "rotational_clip_z": 0.02,
+        "rotational_clip_neg_x": 0.02,
+        "rotational_clip_neg_y": 0.03,
+        "rotational_clip_neg_z": 0.02,
+        "rotational_Ki": 0,
+    }
+    PRECISION_PARAM = {
+        "translational_stiffness": 2000,
+        "translational_damping": 89,
+        "rotational_stiffness": 120,
+        "rotational_damping": 5,
+        "translational_Ki": 0,
+        "translational_clip_x": 0.02,
+        "translational_clip_y": 0.01,
+        "translational_clip_z": 0.01,
+        "translational_clip_neg_x": 0.02,
+        "translational_clip_neg_y": 0.01,
+        "translational_clip_neg_z": 0.01,
+        "rotational_clip_x": 0.04,
+        "rotational_clip_y": 0.04,
+        "rotational_clip_z": 0.04,
+        "rotational_clip_neg_x": 0.04,
+        "rotational_clip_neg_y": 0.04,
+        "rotational_clip_neg_z": 0.04,
+        "rotational_Ki": 0,
+    }
+
+
+class DualAgilexEnv(AgilexEnv):
     def __init__(
         self,
         fake_env = False,
         save_video = False
     ):
 
-        self.env_left = AgilexEnv(is_left_arm = True, fake_env = fake_env, save_video = save_video)
-        self.env_right = env_right(is_left_arm = False, fake_env = fake_env, save_video = save_video)
+        self.env_left = AgilexEnv(is_left_arm = True, config=LeftEnvConfig(), fake_env=fake_env, save_video=save_video)
+        self.env_right = AgilexEnv(is_left_arm = False, config=LeftEnvConfig(), fake_env = fake_env, save_video = save_video)
 
         # Action/Observation Space
         action_dim = len(self.env_left.action_space.low) + len(self.env_right.action_space.low)
@@ -38,7 +172,7 @@ class DualFrankaEnv(AgilexEnv):
                 "images": gym.spaces.Dict(image_dict)
             }
         )
-        self.display_images = display_images
+        self.display_images = False
         if self.display_images:
             self.img_queue = queue.Queue()
             self.displayer = ImageDisplayer(self.img_queue)

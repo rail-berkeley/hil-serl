@@ -9,7 +9,8 @@ from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
 
 from experiments.config import DefaultTrainingConfig
-from experiments.object_handover_agilex.wrapper import HandOffEnv, GripperPenaltyWrapper
+from experiments.object_handover_agilex.wrapper import DualAgilexEnv, GripperPenaltyWrapper
+from agilex_env.agilex_env import DefaultEnvConfig
 
 class LeftEnvConfig(DefaultEnvConfig):
     SERVER_URL = "http://127.0.0.1:5000/"
