@@ -184,7 +184,7 @@ class AgilexEnv(gym.Env):
 
     def init_pub_sub_node(self):
         print("Init node")
-        rospy.init_node('hilserl_agilex_env', anonymous=True)
+        rospy.init_node(f"hilserl_{self.topic_prefix}_agilex_env", anonymous=True)
         self.joint_sub = rospy.Subscriber(self.topic_prefix + '/joint_states', JointState, self.update_curr_joint)
         self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_euler', Pose, self.update_curr_end_pos)
         self.gripper_state_sub = rospy.Subscriber(f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state)
@@ -200,15 +200,18 @@ class AgilexEnv(gym.Env):
         )
 
     def update_curr_joint(self, joint_state):
-        self.curr_joint = np.ndarray(6)
+        self.curr_joint = joint_state.position
+        print(f"joint state: {self.curr_joint}")
 
-    def update_curr_end_pos(self, pos_cmd):
-        self.curr_joint = np.ndarray(6)
+    def update_curr_end_pos(self, pose_rot):
+        print(f"end pose {pose_rot.position}")
+        print(f"end rotate {pose_rot.orientation}")
 
     def update_gripper_state(self, gripper_state):
         print(f"get gripper val {gripper_state}")
 
     def img_callback(self, image, key):
+        print("receive image")
         self.wrist_img[key].append(image)
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
