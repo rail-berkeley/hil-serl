@@ -166,7 +166,7 @@ class AgilexEnv(gym.Env):
                 ),
                 "images": gym.spaces.Dict(
                     {
-                        key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
+                        key: gym.spaces.Box(0, 255, shape=(480, 640, 3), dtype=np.uint8)
                         for key in config.CAMERAS
                     }
                 ),
