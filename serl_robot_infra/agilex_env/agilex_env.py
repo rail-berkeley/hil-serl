@@ -103,8 +103,8 @@ class AgilexEnv(gym.Env):
         self.topic_prefix = "left" if is_left_arm else "right"
         self.curr_joint = []
         self.curr_end_pos = []
+        self.curr_gripper_pos = 0
         self.wrist_img = {}
-        # TODO: Init ROS node to pub sub topic
         if not fake_env:
             self.init_pub_sub_node()
         self.url = config.SERVER_URL
@@ -186,7 +186,7 @@ class AgilexEnv(gym.Env):
         print("Init node")
         rospy.init_node(f"hilserl_{self.topic_prefix}_agilex_env", anonymous=True)
         self.joint_sub = rospy.Subscriber(self.topic_prefix + '/joint_states', JointState, self.update_curr_joint)
-        self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_euler', Pose, self.update_curr_end_pos)
+        self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_quat', Pose, self.update_curr_end_pos)
         self.gripper_state_sub = rospy.Subscriber(f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state)
         self.cameras_subscrib = {}
         for key in self.config.CAMERAS:
@@ -206,12 +206,22 @@ class AgilexEnv(gym.Env):
     def update_curr_end_pos(self, pose_rot):
         print(f"end pose {pose_rot.position}")
         print(f"end rotate {pose_rot.orientation}")
+        end_pose = []
+        end_pose.append(pose_rot.position.x)
+        end_pose.append(pose_rot.position.y)
+        end_pose.append(pose_rot.position.z)
+        end_pose.append(pose_rot.orientation.x)
+        end_pose.append(pose_rot.orientation.y)
+        end_pose.append(pose_rot.orientation.z)
+        end_pose.append(pose_rot.orientation.w)
+        self.curr_end_pos = end_pose
 
     def update_gripper_state(self, gripper_state):
         print(f"get gripper val {gripper_state}")
+        self.curr_gripper_pos = gripper_state
 
     def img_callback(self, image, key):
-        print("receive image")
+        print(f"receive image {key}")
         self.wrist_img[key].append(image)
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
@@ -244,13 +254,13 @@ class AgilexEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         xyz_delta = action[:3]
 
-        self.nextpos = self.currpos.copy()
+        self.nextpos = self.curr_end_pos.copy()
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
 
         # GET ORIENTATION FROM ACTION
         self.nextpos[3:] = (
             Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
-            * Rotation.from_quat(self.currpos[3:])
+            * Rotation.from_quat(self.curr_end_pos[3:])
         ).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
@@ -262,7 +272,7 @@ class AgilexEnv(gym.Env):
         dt = time.time() - start_time
         time.sleep(max(0, (1.0 / self.hz) - dt))
 
-        self._update_currpos()
+        self._update_curr_end_pos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)
         done = self.curr_path_length >= self.max_episode_length or reward or self.terminate
@@ -292,7 +302,7 @@ class AgilexEnv(gym.Env):
         if goal.shape == (6,):
             goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
         steps = int(timeout * self.hz)
-        path = np.linspace(self.currpos, goal, steps)
+        path = np.linspace(self.curr_end_pos, goal, steps)
         for p in path:
             self._send_pos_command(p)
             time.sleep(1 / self.hz)
@@ -305,7 +315,7 @@ class AgilexEnv(gym.Env):
         Should override this method if custom reset procedure is needed.
         """
         # Change to precision mode for reset        # Use compliance mode for coupled reset
-        self._send_pos_command(self.currpos)
+        self._send_pos_command(self.curr_end_pos)
         time.sleep(0.3)
         requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
         time.sleep(0.5)
@@ -404,15 +414,16 @@ class AgilexEnv(gym.Env):
         gripper_msg = pos
         self.gripper_control_pub.publish(gripper_msg)
 
-    def _update_currpos(self):
+    def _update_curr_end_pos(self):
         """
         Internal function to get the latest state of the robot and its gripper.
         """
+        # FIXME: resolve data race problem
         pass
 
     def _get_obs(self) -> dict:
         state_observation = {
-            "tcp_pose": self.currpos,
+            "tcp_pose": self.curr_end_pos,
             "tcp_vel": self.currvel,
             "gripper_pose": self.curr_gripper_pos,
             "tcp_force": self.currforce,
