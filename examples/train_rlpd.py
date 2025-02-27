@@ -154,7 +154,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     intervention_count = 0
     intervention_steps = 0
 
-    pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
+    pbar = tqdm.tqdm(range(start_step, config.max_steps), desc="Actor step", dynamic_ncols=True)
     for step in pbar:
         timer.tick("total")
 
@@ -163,6 +163,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 actions = env.action_space.sample()
             else:
                 sampling_rng, key = jax.random.split(sampling_rng)
+                print("before sample action")
                 actions = agent.sample_actions(
                     observations=jax.device_put(obs),
                     seed=key,
@@ -172,8 +173,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
         # Step environment
         with timer.context("step_env"):
-
+            print("here")
             next_obs, reward, done, truncated, info = env.step(actions)
+            print("finish step")
             if "left" in info:
                 info.pop("left")
             if "right" in info:
@@ -223,7 +225,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 res = client.update()
                 print_green(f"finish update client, res {res}")
                 obs, _ = env.reset()
-        flag_render = True
+        flag_render = False
         if flag_render:
             env.render()
 

@@ -20,8 +20,8 @@ class LeftEnvConfig(DefaultEnvConfig):
     ARM = "left"
     SERVER_URL = "http://127.0.0.1:5000/"
     CAMERAS = {
-        "wrist": "127122270572",
-        "front": "daibai_dcw2",
+        "wrist": "/camera_l/color/image_raw",
+        "front": "/camera_f/color/image_raw",
     }
     IMAGE_CROP = {
         "wrist": lambda img: img[:, 250:],
@@ -80,7 +80,7 @@ class LeftEnvConfig(DefaultEnvConfig):
 class RightEnvConfig(DefaultEnvConfig):
     ARM = "right"
     CAMERAS = {
-        "wrist": "127122270572",
+        "wrist": "/camera_r/color/image_raw",
     }
     IMAGE_CROP = {
         "wrist": lambda img: img[::-1, ::-1][:, :900],

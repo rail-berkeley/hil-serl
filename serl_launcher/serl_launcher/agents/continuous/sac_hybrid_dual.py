@@ -517,6 +517,7 @@ class SACAgentHybridDualArm(flax.struct.PyTreeNode):
             grasp_critic=[observations],
             temperature=[],
         )["params"]
+        print(f"model param {params}")
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(

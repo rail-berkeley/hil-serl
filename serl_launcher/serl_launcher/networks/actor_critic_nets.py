@@ -132,8 +132,10 @@ class Policy(nn.Module):
         if self.encoder is None:
             obs_enc = observations
         else:
+            print("before encoder")
+            print(f"observe {observations}")
             obs_enc = self.encoder(observations, train=train, stop_gradient=True)
-
+        print("before network")
         outputs = self.network(obs_enc, train=train)
 
         means = nn.Dense(self.action_dim, kernel_init=default_init())(outputs)

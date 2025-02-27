@@ -14,6 +14,7 @@ from datetime import datetime
 from collections import OrderedDict
 from typing import Dict
 from functools import partial
+from cv_bridge import CvBridge
 
 import rospy
 from geometry_msgs.msg import Pose
@@ -106,13 +107,14 @@ class AgilexEnv(gym.Env):
         self.gripper_sleep = config.GRIPPER_SLEEP
         self.topic_prefix = config.ARM
         self.curr_joint = []
-        self.curr_end_pos = [0] * 7
-        self.curr_vel = [0] * 7
-        self.curr_gripper_pos = 0
+        self.curr_end_pos = np.full(7, 0.0, dtype=np.float32)
+        self.curr_end_pos[6] = 1.0
+        self.curr_vel = np.full(6, 0.0, dtype=np.float32)
+        self.curr_gripper_pos = [0.0]
         self.wrist_img = {}
+        self.cv_bridge = CvBridge()
         if not fake_env:
             self.init_pub_sub_node()
-        self.url = config.SERVER_URL
         # convert last 3 elements from euler to quat, from size (6,) to (7,)
         self.resetpos = np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
@@ -193,7 +195,10 @@ class AgilexEnv(gym.Env):
 
     def init_pub_sub_node(self):
         print("Init node")
-        rospy.init_node(f"hilserl_{self.topic_prefix}_agilex_env", anonymous=True)
+        if rospy.get_node_uri():
+            print("Node has been initialzed already")
+        else:
+            rospy.init_node(f"hilserl_{self.topic_prefix}_agilex_env", anonymous=True)
         self.joint_sub = rospy.Subscriber(
             self.topic_prefix + "/joint_states", JointState, self.update_curr_joint
         )
@@ -204,9 +209,9 @@ class AgilexEnv(gym.Env):
             f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state
         )
         self.cameras_subscrib = {}
-        for key in self.config.CAMERAS:
+        for key, values in self.config.CAMERAS.items():
             self.cameras_subscrib[key] = rospy.Subscriber(
-                f"{self.topic_prefix}/{key}/color/image_raw",
+                values,
                 Image,
                 partial(self.img_callback, key=key),
                 queue_size=1000,
@@ -237,15 +242,20 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.y)
         end_pose.append(pose_rot.orientation.z)
         end_pose.append(pose_rot.orientation.w)
-        self.curr_end_pos = end_pose
+        self.curr_end_pos = np.array(end_pose)
 
     def update_gripper_state(self, gripper_state):
         print(f"get gripper val {gripper_state}")
-        self.curr_gripper_pos = gripper_state
+        self.curr_gripper_pos = [gripper_state.data]
 
     def img_callback(self, image, key):
-        print(f"receive image {key}")
-        self.wrist_img[key].append(image)
+        cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding='bgr8')
+        #print(f"image shape {key} {cv_image.shape}")
+        self.wrist_img[key] = cv_image
+        #if key not in self.wrist_img:
+        #    self.wrist_img[key] = [cv_image]
+        #else:
+        #    self.wrist_img[key].append(cv_image)
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
@@ -344,13 +354,13 @@ class AgilexEnv(gym.Env):
         # Change to precision mode for reset        # Use compliance mode for coupled reset
         self._send_pos_command(self.curr_end_pos)
         time.sleep(0.3)
-        requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
         time.sleep(0.5)
 
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
-            requests.post(self.url + "jointreset")
+            #requests.post(self.url + "jointreset")
             time.sleep(0.5)
 
         # Perform Carteasian reset
@@ -370,12 +380,12 @@ class AgilexEnv(gym.Env):
             self.interpolate_move(reset_pose, timeout=1)
 
         # Change to compliance mode
-        requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
 
     def reset(self, joint_reset=False, **kwargs):
         self.last_gripper_act = time.time()
         # TODO: update param
-        requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
         if self.save_video:
             self.save_video_recording()
 
