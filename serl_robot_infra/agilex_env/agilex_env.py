@@ -1,4 +1,5 @@
 """Gym Interface for Franka"""
+
 import os
 import numpy as np
 import gymnasium as gym
@@ -36,7 +37,12 @@ class ImageDisplayer(threading.Thread):
                 break
 
             frame = np.concatenate(
-                [cv2.resize(v, (128, 128)) for k, v in img_array.items() if "full" not in k], axis=1
+                [
+                    cv2.resize(v, (128, 128))
+                    for k, v in img_array.items()
+                    if "full" not in k
+                ],
+                axis=1,
             )
 
             cv2.imshow(self.name, frame)
@@ -49,9 +55,8 @@ class ImageDisplayer(threading.Thread):
 class DefaultEnvConfig:
     """Default configuration for FrankaEnv. Fill in the values below."""
 
-    SERVER_URL: str = "http://127.0.0.1:5000/"
     CAMERAS: Dict = {
-        "dabai": "127122270572",
+        "wrist": "127122270572",
     }
     IMAGE_CROP: dict[str, callable] = {}
     TARGET_POSE: np.ndarray = np.zeros((6,))
@@ -70,7 +75,7 @@ class DefaultEnvConfig:
     LOAD_PARAM: Dict[str, float] = {
         "mass": 0.0,
         "F_x_center_load": [0.0, 0.0, 0.0],
-        "load_inertia": [0, 0, 0, 0, 0, 0, 0, 0, 0]
+        "load_inertia": [0, 0, 0, 0, 0, 0, 0, 0, 0],
     }
     DISPLAY_IMAGE: bool = True
     GRIPPER_SLEEP: float = 0.6
@@ -102,7 +107,8 @@ class AgilexEnv(gym.Env):
         self.is_left_arm = is_left_arm
         self.topic_prefix = "left" if is_left_arm else "right"
         self.curr_joint = []
-        self.curr_end_pos = []
+        self.curr_end_pos = [0] * 7
+        self.curr_vel = [0] * 7
         self.curr_gripper_pos = 0
         self.wrist_img = {}
         if not fake_env:
@@ -118,7 +124,9 @@ class AgilexEnv(gym.Env):
         self.random_xy_range = config.RANDOM_XY_RANGE
         self.random_rz_range = config.RANDOM_RZ_RANGE
         self.hz = hz
-        self.joint_reset_cycle = config.JOINT_RESET_PERIOD  # reset the robot joint every 200 cycles
+        self.joint_reset_cycle = (
+            config.JOINT_RESET_PERIOD
+        )  # reset the robot joint every 200 cycles
 
         self.save_video = save_video
         if self.save_video:
@@ -156,8 +164,10 @@ class AgilexEnv(gym.Env):
                     }
                 ),
                 "images": gym.spaces.Dict(
-                    {key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8) 
-                                for key in config.CAMERAS}
+                    {
+                        key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
+                        for key in config.CAMERAS
+                    }
                 ),
             }
         )
@@ -171,7 +181,7 @@ class AgilexEnv(gym.Env):
             self.displayer = ImageDisplayer(self.img_queue, self.url)
             self.displayer.start()
 
-        #if not fake_env:
+        # if not fake_env:
         #    from pynput import keyboard
         #    self.terminate = False
         #    def on_press(key):
@@ -185,16 +195,30 @@ class AgilexEnv(gym.Env):
     def init_pub_sub_node(self):
         print("Init node")
         rospy.init_node(f"hilserl_{self.topic_prefix}_agilex_env", anonymous=True)
-        self.joint_sub = rospy.Subscriber(self.topic_prefix + '/joint_states', JointState, self.update_curr_joint)
-        self.end_pose_euler_sub = rospy.Subscriber(self.topic_prefix + '/end_pose_quat', Pose, self.update_curr_end_pos)
-        self.gripper_state_sub = rospy.Subscriber(f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state)
+        self.joint_sub = rospy.Subscriber(
+            self.topic_prefix + "/joint_states", JointState, self.update_curr_joint
+        )
+        self.end_pose_euler_sub = rospy.Subscriber(
+            self.topic_prefix + "/end_pose_quat", Pose, self.update_curr_end_pos
+        )
+        self.gripper_state_sub = rospy.Subscriber(
+            f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state
+        )
         self.cameras_subscrib = {}
         for key in self.config.CAMERAS:
-            self.cameras_subscrib[key] = rospy.Subscriber(f"{self.topic_prefix}/{key}/color/image_raw",Image, partial(self.img_callback, key=key), queue_size=1000, tcp_nodelay=True)
+            self.cameras_subscrib[key] = rospy.Subscriber(
+                f"{self.topic_prefix}/{key}/color/image_raw",
+                Image,
+                partial(self.img_callback, key=key),
+                queue_size=1000,
+                tcp_nodelay=True,
+            )
         self.end_pose_pub = rospy.Publisher(
             self.topic_prefix + "/control_pose", Pose, queue_size=1
         )
-        self.gripper_pub = rospy.Publisher(f"{self.topic_prefix}/control_gripper", Float64, queue_size=1)
+        self.gripper_pub = rospy.Publisher(
+            f"{self.topic_prefix}/control_gripper", Float64, queue_size=1
+        )
         self.joint_pub = rospy.Publisher(
             self.topic_prefix + "/control_joint", Pose, queue_size=1
         )
@@ -275,7 +299,9 @@ class AgilexEnv(gym.Env):
         self._update_curr_end_pos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)
-        done = self.curr_path_length >= self.max_episode_length or reward or self.terminate
+        done = (
+            self.curr_path_length >= self.max_episode_length or reward or self.terminate
+        )
         return ob, int(reward), done, False, {"succeed": reward}
 
     def compute_reward(self, obs) -> bool:
@@ -283,9 +309,11 @@ class AgilexEnv(gym.Env):
         # convert from quat to euler first
         current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
         target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
-        diff_rot = current_rot.T  @ target_rot
+        diff_rot = current_rot.T @ target_rot
         diff_euler = Rotation.from_matrix(diff_rot).as_euler("xyz")
-        delta = np.abs(np.hstack([current_pose[:3] - self._TARGET_POSE[:3], diff_euler]))
+        delta = np.abs(
+            np.hstack([current_pose[:3] - self._TARGET_POSE[:3], diff_euler])
+        )
         # print(f"Delta: {delta}")
         if np.all(delta < self._REWARD_THRESHOLD):
             return True
@@ -347,13 +375,16 @@ class AgilexEnv(gym.Env):
 
     def reset(self, joint_reset=False, **kwargs):
         self.last_gripper_act = time.time()
-        #TODO: update param
+        # TODO: update param
         requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
         if self.save_video:
             self.save_video_recording()
 
         self.cycle_count += 1
-        if self.joint_reset_cycle!=0 and self.cycle_count % self.joint_reset_cycle == 0:
+        if (
+            self.joint_reset_cycle != 0
+            and self.cycle_count % self.joint_reset_cycle == 0
+        ):
             self.cycle_count = 0
             joint_reset = True
 
@@ -367,34 +398,34 @@ class AgilexEnv(gym.Env):
     def save_video_recording(self):
         try:
             if len(self.recording_frames):
-                if not os.path.exists('./videos'):
-                    os.makedirs('./videos')
-                
+                if not os.path.exists("./videos"):
+                    os.makedirs("./videos")
+
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                
+
                 for camera_key in self.recording_frames[0].keys():
                     if self.url == "http://127.0.0.1:5000/":
-                        video_path = f'./videos/left_{camera_key}_{timestamp}.mp4'
+                        video_path = f"./videos/left_{camera_key}_{timestamp}.mp4"
                     else:
-                        video_path = f'./videos/right_{camera_key}_{timestamp}.mp4'
-                    
+                        video_path = f"./videos/right_{camera_key}_{timestamp}.mp4"
+
                     # Get the shape of the first frame for this camera
                     first_frame = self.recording_frames[0][camera_key]
                     height, width = first_frame.shape[:2]
-                    
+
                     video_writer = cv2.VideoWriter(
                         video_path,
                         cv2.VideoWriter_fourcc(*"mp4v"),
                         10,
                         (width, height),
                     )
-                    
+
                     for frame_dict in self.recording_frames:
                         video_writer.write(frame_dict[camera_key])
-                    
+
                     video_writer.release()
                     print(f"Saved video for camera {camera_key} at {video_path}")
-                
+
             self.recording_frames.clear()
         except Exception as e:
             print(f"Failed to save video: {e}")
@@ -406,9 +437,15 @@ class AgilexEnv(gym.Env):
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
         arr = np.array(pos).astype(np.float32)
+        print("send pose command")
         pose = Pose()
         pose.position.x, pose.position.y, pose.position.z = arr[:3]
-        pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = arr[3:]
+        (
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        ) = arr[3:]
         self.end_pose_pub.publish(pose)
 
     def _send_gripper_command(self, pos: float):
@@ -426,15 +463,15 @@ class AgilexEnv(gym.Env):
     def _get_obs(self) -> dict:
         state_observation = {
             "tcp_pose": self.curr_end_pos,
-            "tcp_vel": self.currvel,
+            "tcp_vel": self.curr_vel,
             "gripper_pose": self.curr_gripper_pos,
-            "tcp_force": self.currforce,
-            "tcp_torque": self.currtorque,
+            # "tcp_force": self.currforce,
+            # "tcp_torque": self.currtorque,
         }
         return copy.deepcopy(dict(images=self.wrist_img, state=state_observation))
 
     def close(self):
-        if hasattr(self, 'listener'):
+        if hasattr(self, "listener"):
             self.listener.stop()
         if self.display_image:
             self.img_queue.put(None)

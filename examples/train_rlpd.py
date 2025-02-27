@@ -86,9 +86,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             while not done:
                 sampling_rng, key = jax.random.split(sampling_rng)
                 actions = agent.sample_actions(
-                    observations=jax.device_put(obs),
-                    argmax=False,
-                    seed=key
+                    observations=jax.device_put(obs), argmax=False, seed=key
                 )
                 actions = np.asarray(jax.device_get(actions))
 
@@ -108,9 +106,16 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         print(f"success rate: {success_counter / FLAGS.eval_n_trajs}")
         print(f"average time: {np.mean(time_list)}")
         return  # after done eval, return and exit
-    
+
     start_step = (
-        int(os.path.basename(natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))[-1])[12:-4]) + 1
+        int(
+            os.path.basename(
+                natsorted(
+                    glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl"))
+                )[-1]
+            )[12:-4]
+        )
+        + 1
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
         else 0
     )
@@ -193,8 +198,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 masks=1.0 - done,
                 dones=done,
             )
-            if 'grasp_penalty' in info:
-                transition['grasp_penalty']= info['grasp_penalty']
+            if "grasp_penalty" in info:
+                transition["grasp_penalty"] = info["grasp_penalty"]
             else:
                 print_green("no grasp_penalty")
             data_store.insert(transition)
@@ -254,13 +259,18 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     The learner loop, which runs when "--learner" is set to True.
     """
     start_step = (
-        int(os.path.basename(checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path)))[11:])
+        int(
+            os.path.basename(
+                checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path))
+            )[11:]
+        )
         + 1
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
         else 0
     )
     step = start_step
     print("run before callback")
+
     def stats_callback(type: str, payload: dict) -> dict:
         """Callback for when server receives stats request."""
         assert type == "send-stats", f"Invalid request type: {type}"
@@ -318,7 +328,9 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         train_networks_to_update = frozenset({"critic", "actor", "temperature"})
     else:
         train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
-        train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
+        train_networks_to_update = frozenset(
+            {"critic", "grasp_critic", "actor", "temperature"}
+        )
     print_green(f"buffer size before step {len(replay_buffer)}")
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
@@ -330,8 +342,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
                 print_green(f"critic step buffer size {len(replay_buffer)}")
                 batch = next(replay_iterator)
                 print(f"batach size {len(batch)}")
-                #demo_batch = next(demo_iterator)
-                #batch = concat_batches(batch, demo_batch, axis=0)
+                # demo_batch = next(demo_iterator)
+                # batch = concat_batches(batch, demo_batch, axis=0)
 
             with timer.context("train_critics"):
                 agent, critics_info = agent.update(
@@ -343,8 +355,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             print_green(f"agent update buffer size {len(replay_buffer)}")
             batch = next(replay_iterator)
             print("get batch")
-            #demo_batch = next(demo_iterator)
-            #batch = concat_batches(batch, demo_batch, axis=0)
+            # demo_batch = next(demo_iterator)
+            # batch = concat_batches(batch, demo_batch, axis=0)
             print("before update")
             agent, update_info = agent.update(
                 batch,
@@ -390,10 +402,14 @@ def main(_):
         classifier=True,
     )
     env = RecordEpisodeStatistics(env)
-
+    print(f"env observe space {env.observation_space}")
+    print(f"env action space {env.action_space}")
     rng, sampling_rng = jax.random.split(rng)
-    
-    if config.setup_mode == 'single-arm-fixed-gripper' or config.setup_mode == 'dual-arm-fixed-gripper':   
+
+    if (
+        config.setup_mode == "single-arm-fixed-gripper"
+        or config.setup_mode == "dual-arm-fixed-gripper"
+    ):
         agent: SACAgent = make_sac_pixel_agent(
             seed=FLAGS.seed,
             sample_obs=env.observation_space.sample(),
@@ -403,7 +419,7 @@ def main(_):
             discount=config.discount,
         )
         include_grasp_penalty = False
-    elif config.setup_mode == 'single-arm-learned-gripper':
+    elif config.setup_mode == "single-arm-learned-gripper":
         agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(
             seed=FLAGS.seed,
             sample_obs=env.observation_space.sample(),
@@ -413,7 +429,7 @@ def main(_):
             discount=config.discount,
         )
         include_grasp_penalty = True
-    elif config.setup_mode == 'dual-arm-learned-gripper':
+    elif config.setup_mode == "dual-arm-learned-gripper":
         agent: SACAgentHybridDualArm = make_sac_pixel_agent_hybrid_dual_arm(
             seed=FLAGS.seed,
             sample_obs=env.observation_space.sample(),
@@ -428,9 +444,7 @@ def main(_):
 
     # replicate agent across devices
     # need the jnp.array to avoid a bug where device_put doesn't recognize primitives
-    agent = jax.device_put(
-        jax.tree_map(jnp.array, agent), sharding.replicate()
-    )
+    agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
     include_grasp_penalty = False
 
     if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
@@ -472,14 +486,19 @@ def main(_):
             include_grasp_penalty=include_grasp_penalty,
         )
 
-        #assert FLAGS.demo_path is not None
+        # assert FLAGS.demo_path is not None
         if FLAGS.demo_path is not None:
             for path in FLAGS.demo_path:
                 with open(path, "rb") as f:
                     transitions = pkl.load(f)
                     for transition in transitions:
-                        if 'infos' in transition and 'grasp_penalty' in transition['infos']:
-                            transition['grasp_penalty'] = transition['infos']['grasp_penalty']
+                        if (
+                            "infos" in transition
+                            and "grasp_penalty" in transition["infos"]
+                        ):
+                            transition["grasp_penalty"] = transition["infos"][
+                                "grasp_penalty"
+                            ]
                             demo_buffer.insert(transition)
         print_green(f"demo buffer size: {len(demo_buffer)}")
         print_green(f"online buffer size: {len(replay_buffer)}")
