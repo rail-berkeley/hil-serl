@@ -17,6 +17,7 @@ from experiments.object_handover_agilex.wrapper import (
 
 
 class LeftEnvConfig(DefaultEnvConfig):
+    ARM = "left"
     SERVER_URL = "http://127.0.0.1:5000/"
     CAMERAS = {
         "wrist": "127122270572",
@@ -77,7 +78,7 @@ class LeftEnvConfig(DefaultEnvConfig):
 
 
 class RightEnvConfig(DefaultEnvConfig):
-    SERVER_URL = "http://127.0.0.2:5000/"
+    ARM = "right"
     CAMERAS = {
         "wrist": "127122270572",
     }

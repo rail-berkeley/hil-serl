@@ -55,6 +55,7 @@ class ImageDisplayer(threading.Thread):
 class DefaultEnvConfig:
     """Default configuration for FrankaEnv. Fill in the values below."""
 
+    ARM = "left"
     CAMERAS: Dict = {
         "wrist": "127122270572",
     }
@@ -89,7 +90,6 @@ class DefaultEnvConfig:
 class AgilexEnv(gym.Env):
     def __init__(
         self,
-        is_left_arm=False,
         hz=10,
         fake_env=False,
         save_video=False,
@@ -104,8 +104,7 @@ class AgilexEnv(gym.Env):
         self.max_episode_length = config.MAX_EPISODE_LENGTH
         self.display_image = config.DISPLAY_IMAGE
         self.gripper_sleep = config.GRIPPER_SLEEP
-        self.is_left_arm = is_left_arm
-        self.topic_prefix = "left" if is_left_arm else "right"
+        self.topic_prefix = config.ARM
         self.curr_joint = []
         self.curr_end_pos = [0] * 7
         self.curr_vel = [0] * 7
