@@ -111,8 +111,6 @@ class DualAgilexEnv(AgilexEnv):
         return ob, {}
 
     def combine_obs(self, ob_left, ob_right):
-        print(f"ob_left {ob_left}")
-        print(f"ob_right {ob_right}")
         left_images = {
             f"left/{key}": ob_left["images"][key] for key in ob_left["images"].keys()
         }

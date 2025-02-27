@@ -67,24 +67,20 @@ class Critic(nn.Module):
             value = nn.Dense(1, kernel_init=default_init())(outputs)
         return jnp.squeeze(value, -1)
 
-    
+
 class GraspCritic(nn.Module):
     encoder: Optional[nn.Module]
     network: nn.Module
     init_final: Optional[float] = None
     output_dim: Optional[int] = 3
-    
+
     @nn.compact
-    def __call__(
-        self, 
-        observations: jnp.ndarray, 
-        train: bool = False
-    ) -> jnp.ndarray:
+    def __call__(self, observations: jnp.ndarray, train: bool = False) -> jnp.ndarray:
         if self.encoder is None:
             obs_enc = observations
         else:
             obs_enc = self.encoder(observations)
-        
+
         outputs = self.network(obs_enc, train)
         if self.init_final is not None:
             value = nn.Dense(
@@ -93,7 +89,7 @@ class GraspCritic(nn.Module):
             )(outputs)
         else:
             value = nn.Dense(self.output_dim, kernel_init=default_init())(outputs)
-        return value # (batch_size, self.output_dim)
+        return value  # (batch_size, self.output_dim)
 
 
 def ensemblize(cls, num_qs, out_axes=0):
@@ -104,7 +100,10 @@ def ensemblize(cls, num_qs, out_axes=0):
             ensemble = nn.vmap(
                 cls,
                 variable_axes={"params": 0},
-                split_rngs={"params": True, "dropout": True},  # Include 'dropout' if needed
+                split_rngs={
+                    "params": True,
+                    "dropout": True,
+                },  # Include 'dropout' if needed
                 in_axes=None,
                 out_axes=out_axes,
                 axis_size=num_qs,
@@ -113,6 +112,7 @@ def ensemblize(cls, num_qs, out_axes=0):
             return ensemble()(*args, **kwargs)
 
     return EnsembleModule
+
 
 class Policy(nn.Module):
     encoder: Optional[nn.Module]
@@ -127,15 +127,16 @@ class Policy(nn.Module):
 
     @nn.compact
     def __call__(
-        self, observations: jnp.ndarray, temperature: float = 1.0, train: bool = False, non_squash_distribution: bool = False,
+        self,
+        observations: jnp.ndarray,
+        temperature: float = 1.0,
+        train: bool = False,
+        non_squash_distribution: bool = False,
     ) -> distrax.Distribution:
         if self.encoder is None:
             obs_enc = observations
         else:
-            print("before encoder")
-            print(f"observe {observations}")
             obs_enc = self.encoder(observations, train=train, stop_gradient=True)
-        print("before network")
         outputs = self.network(obs_enc, train=train)
 
         means = nn.Dense(self.action_dim, kernel_init=default_init())(outputs)
@@ -177,7 +178,7 @@ class Policy(nn.Module):
             )
 
         return distribution
-    
+
     def get_features(self, observations):
         return self.encoder(observations, train=False, stop_gradient=True)
 

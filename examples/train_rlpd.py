@@ -154,7 +154,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     intervention_count = 0
     intervention_steps = 0
 
-    pbar = tqdm.tqdm(range(start_step, config.max_steps), desc="Actor step", dynamic_ncols=True)
+    pbar = tqdm.tqdm(
+        range(start_step, config.max_steps), desc="Actor step", dynamic_ncols=True
+    )
     for step in pbar:
         timer.tick("total")
 
@@ -173,9 +175,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
         # Step environment
         with timer.context("step_env"):
-            print("here")
             next_obs, reward, done, truncated, info = env.step(actions)
-            print("finish step")
             if "left" in info:
                 info.pop("left")
             if "right" in info:
@@ -287,7 +287,6 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     server.start(threaded=True)
 
     # Loop to wait until replay_buffer is filled
-    print_green("run here")
     pbar = tqdm.tqdm(
         total=config.training_starts,
         initial=len(replay_buffer),
