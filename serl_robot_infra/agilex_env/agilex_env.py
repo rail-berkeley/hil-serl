@@ -406,8 +406,10 @@ class AgilexEnv(gym.Env):
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
         arr = np.array(pos).astype(np.float32)
-        data = {"arr": arr.tolist()}
-        self.end_pose_pub.publish(data)
+        pose = Pose()
+        pose.position.x, pose.position.y, pose.position.z = arr[:3]
+        pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = arr[3:]
+        self.end_pose_pub.publish(pose)
 
     def _send_gripper_command(self, pos: float):
         """Internal function to send gripper command to the robot."""

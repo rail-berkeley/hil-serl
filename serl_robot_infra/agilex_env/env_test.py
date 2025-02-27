@@ -4,6 +4,9 @@ import numpy as np
 
 import time
 
+from franka_env.utils.rotations import euler_2_quat, quat_2_euler
+from geometry_msgs.msg import Pose
+
 class LeftEnvConfig(DefaultEnvConfig):
     SERVER_URL = "http://127.0.0.2:5000/"
     REALSENSE_CAMERAS = {
@@ -78,4 +81,18 @@ class LeftEnvConfig(DefaultEnvConfig):
 env = AgilexEnv(is_left_arm=False, config=LeftEnvConfig(), fake_env=False, save_video=False)
 
 while True:
+    position = [
+        0.277, \
+        0, \
+        0.267.0, \
+        0, \
+        84.0, \
+        0, \
+        0]
+    euler = [position[a]*3.1415926/180 for a in range(3, 6)]
+    pose= np.concatenate(
+            [position[:3], euler_2_quat(euler)]
+    )
+    env._send_pos_command(pose)
     time.sleep(2.0)
+    env._send_gripper_command(0.06)
