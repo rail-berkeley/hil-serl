@@ -414,7 +414,7 @@ class AgilexEnv(gym.Env):
     def _send_gripper_command(self, pos: float):
         """Internal function to send gripper command to the robot."""
         gripper_msg = pos
-        self.gripper_control_pub.publish(gripper_msg)
+        self.gripper_pub.publish(gripper_msg)
 
     def _update_curr_end_pos(self):
         """

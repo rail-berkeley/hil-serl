@@ -79,20 +79,49 @@ class LeftEnvConfig(DefaultEnvConfig):
 
 
 env = AgilexEnv(is_left_arm=False, config=LeftEnvConfig(), fake_env=False, save_video=False)
-
+count = 0
 while True:
-    position = [
-        0.277, \
-        0, \
-        0.267.0, \
-        0, \
-        84.0, \
-        0, \
-        0]
-    euler = [position[a]*3.1415926/180 for a in range(3, 6)]
-    pose= np.concatenate(
-            [position[:3], euler_2_quat(euler)]
-    )
-    env._send_pos_command(pose)
-    time.sleep(2.0)
-    env._send_gripper_command(0.06)
+    if count == 0:
+        position = [
+            0.277, \
+            0, \
+            0.267, \
+            0, \
+            84.0, \
+            0, \
+            0]
+        euler = [position[a]*3.1415926/180 for a in range(3, 6)]
+        pose= np.concatenate(
+                [position[:3], euler_2_quat(euler)]
+        )
+        print(f"euler: {euler}")
+        quat = euler_2_quat(euler)
+        print(f"quat: {quat}")
+        new_euler = quat_2_euler(quat)
+        print(f"new euler: {new_euler}")
+        env._send_pos_command(pose)
+        env._send_gripper_command(0.06)
+    elif count == 400:
+        position = [
+            0.277, \
+            0, \
+            0.367, \
+            0, \
+            84.0, \
+            0, \
+            0]
+        euler = [position[a]*3.1415926/180 for a in range(3, 6)]
+        pose= np.concatenate(
+                [position[:3], euler_2_quat(euler)]
+        )
+        print(f"euler: {euler}")
+        quat = euler_2_quat(euler)
+        print(f"quat: {quat}")
+        new_euler = quat_2_euler(quat)
+        print(f"new euler: {new_euler}")
+        env._send_pos_command(pose)
+        env._send_gripper_command(0.02)
+    elif count == 800:
+        count = -1
+    time.sleep(0.01)
+    count += 1
