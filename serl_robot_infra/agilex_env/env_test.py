@@ -4,22 +4,15 @@ import numpy as np
 
 import time
 
-from franka_env.utils.rotations import euler_2_quat, quat_2_euler
+from tf.transformations import quaternion_from_euler  # 用于欧拉角到四元数的转换
+from tf.transformations import euler_from_quaternion  # 用于欧拉角到四元数的转换
 from geometry_msgs.msg import Pose
 
 class LeftEnvConfig(DefaultEnvConfig):
     SERVER_URL = "http://127.0.0.2:5000/"
-    REALSENSE_CAMERAS = {
-        "wrist_1": {
-            "serial_number": "127122270146",
-            "dim": (1280, 720),
-            "exposure": 40000,
-        },
-        "wrist_2": {
-            "serial_number": "127122270350",
-            "dim": (1280, 720),
-            "exposure": 40000,
-        },
+    ARM = "left"
+    CAMERAS = {
+        "wrist_1":"image_l/camer_color/raw",
     }
     IMAGE_CROP = {
         "wrist_1": lambda img: img[150:450, 350:1100],
@@ -34,7 +27,7 @@ class LeftEnvConfig(DefaultEnvConfig):
     RANDOM_XY_RANGE = 0.02
     RANDOM_RZ_RANGE = 0.05
     ACTION_SCALE = (0.01, 0.06, 1)
-    DISPLAY_IMAGE = True
+    DISPLAY_IMAGE = False
     MAX_EPISODE_LENGTH = 100
     COMPLIANCE_PARAM = {
         "translational_stiffness": 2000,
@@ -77,51 +70,27 @@ class LeftEnvConfig(DefaultEnvConfig):
         "rotational_Ki": 0.0,
     }
 
-
-env = AgilexEnv(is_left_arm=False, config=LeftEnvConfig(), fake_env=False, save_video=False)
+env = AgilexEnv(
+    config=LeftEnvConfig(), fake_env=False, save_video=False
+)
 count = 0
 while True:
     if count == 0:
-        position = [
-            0.277, \
-            0, \
-            0.267, \
-            0, \
-            84.0, \
-            0, \
-            0]
-        euler = [position[a]*3.1415926/180 for a in range(3, 6)]
-        pose= np.concatenate(
-                [position[:3], euler_2_quat(euler)]
-        )
-        print(f"euler: {euler}")
-        quat = euler_2_quat(euler)
-        print(f"quat: {quat}")
-        new_euler = quat_2_euler(quat)
-        print(f"new euler: {new_euler}")
-        env._send_pos_command(pose)
+        position = [0.277, 0, 0.267, 0, 84.0, 0, 0]
+        euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
         env._send_gripper_command(0.06)
     elif count == 400:
-        position = [
-            0.277, \
-            0, \
-            0.367, \
-            0, \
-            84.0, \
-            0, \
-            0]
-        euler = [position[a]*3.1415926/180 for a in range(3, 6)]
-        pose= np.concatenate(
-                [position[:3], euler_2_quat(euler)]
-        )
-        print(f"euler: {euler}")
-        quat = euler_2_quat(euler)
-        print(f"quat: {quat}")
-        new_euler = quat_2_euler(quat)
-        print(f"new euler: {new_euler}")
-        env._send_pos_command(pose)
+        position = [0.277, 0, 0.367, 0, 84.0, 0, 0]
+        euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
         env._send_gripper_command(0.02)
     elif count == 800:
         count = -1
+    pose = np.concatenate([position[:3], quaternion_from_euler(euler[0], euler[1], euler[2])])
+    print(f"euler: {euler}")
+    quat = quaternion_from_euler(euler[0], euler[1], euler[2])
+    print(f"quat: {quat}")
+    new_euler = euler_from_quaternion(quat)
+    print(f"new euler: {new_euler}")
+    env._send_pos_command(pose)
     time.sleep(0.01)
     count += 1
