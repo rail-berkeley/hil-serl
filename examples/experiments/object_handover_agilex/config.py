@@ -27,9 +27,9 @@ class LeftEnvConfig(DefaultEnvConfig):
         "wrist": lambda img: img[:, 250:],
         "front": lambda img: img[100:500, 150:1100],
     }
-    RESET_POSE = np.array([0.6, -0.02, 0.42, np.pi, 0, 0])
-    ABS_POSE_LIMIT_LOW = np.array([0.4, -0.03, 0.3, np.pi - 0.01, -0.3, 0])
-    ABS_POSE_LIMIT_HIGH = np.array([0.67, -0.01, 0.42, np.pi + 0.01, 0.0, 0.01])
+    RESET_POSE = np.array([0.08, 0.00, 0.206, 0, 1.483, 0])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.10, 0.10, np.pi - 0.01, -0.3, 0])
+    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.28, 0.30, np.pi + 0.01, 0.0, 0.01])
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
     DISPLAY_IMAGE = False
@@ -85,9 +85,9 @@ class RightEnvConfig(DefaultEnvConfig):
     IMAGE_CROP = {
         "wrist": lambda img: img[::-1, ::-1][:, :900],
     }
-    RESET_POSE = np.array([0.4, 0.0, 0.5, np.pi, 0, np.pi])
-    ABS_POSE_LIMIT_LOW = np.array([0.32, -0.01, 0.36, np.pi - 0.01, 0.0, np.pi - 0.01])
-    ABS_POSE_LIMIT_HIGH = np.array([0.67, 0.01, 0.5, np.pi + 0.01, 0.3, np.pi + 0.01])
+    RESET_POSE = np.array([0.08, 0.00, 0.206, 0, 1.483, 0])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.10, np.pi - 0.01, 0.0, np.pi - 0.01])
+    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.3, np.pi + 0.01, 0.3, np.pi + 0.01])
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
     DISPLAY_IMAGE = False
