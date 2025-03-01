@@ -7,13 +7,13 @@ import numpy as np
 from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
 from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
-from franka_env.envs.relative_env import DualRelativeFrame
 
 from experiments.config import DefaultTrainingConfig
 from agilex_env.agilex_env import DefaultEnvConfig
 from experiments.object_handover_agilex.wrapper import (
     DualAgilexEnv,
     GripperPenaltyWrapper,
+    DualRelativeFrame,
 )
 
 
