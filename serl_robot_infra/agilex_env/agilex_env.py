@@ -229,11 +229,11 @@ class AgilexEnv(gym.Env):
 
     def update_curr_joint(self, joint_state):
         self.curr_joint = joint_state.position
-        print(f"joint state: {self.curr_joint}")
+        #print(f"joint state: {self.curr_joint}")
 
     def update_curr_end_pos(self, pose_rot):
-        print(f"end pose {pose_rot.position}")
-        print(f"end rotate {pose_rot.orientation}")
+        #print(f"end pose {pose_rot.position}")
+        #print(f"end rotate {pose_rot.orientation}")
         end_pose = []
         end_pose.append(pose_rot.position.x)
         end_pose.append(pose_rot.position.y)
@@ -245,7 +245,7 @@ class AgilexEnv(gym.Env):
         self.curr_end_pos = np.array(end_pose)
 
     def update_gripper_state(self, gripper_state):
-        print(f"get gripper val {gripper_state}")
+        #print(f"get gripper val {gripper_state}")
         self.curr_gripper_pos = [gripper_state.data]
 
     def img_callback(self, image, key):
@@ -446,7 +446,7 @@ class AgilexEnv(gym.Env):
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
         arr = np.array(pos).astype(np.float32)
-        print("send pose command")
+        print(f"arm {self.config.ARM} send pose command {arr}")
         pose = Pose()
         pose.position.x, pose.position.y, pose.position.z = arr[:3]
         (

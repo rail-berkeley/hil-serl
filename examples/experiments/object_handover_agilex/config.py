@@ -7,6 +7,7 @@ import numpy as np
 from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
 from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
+from franka_env.envs.relative_env import DualRelativeFrame
 
 from experiments.config import DefaultTrainingConfig
 from agilex_env.agilex_env import DefaultEnvConfig
@@ -165,7 +166,8 @@ class TrainConfig(DefaultTrainingConfig):
 
         # action is assumed to be (x, y, z, rx, ry, rz, gripper)
         # Transform action from end-effector frame to base frame
-        # env = DualRelativeFrame(env)
+        print("create relative env")
+        env = DualRelativeFrame(env)
 
         # env = DualQuat2EulerWrapper(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)

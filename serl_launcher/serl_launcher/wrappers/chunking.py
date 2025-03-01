@@ -42,6 +42,7 @@ class ChunkingWrapper(gym.Wrapper):
 
     def __init__(self, env: gym.Env, obs_horizon: int, act_exec_horizon: Optional[int]):
         super().__init__(env)
+        print("init chunking wrap")
         self.env = env
         self.obs_horizon = obs_horizon
         self.act_exec_horizon = act_exec_horizon
@@ -59,6 +60,7 @@ class ChunkingWrapper(gym.Wrapper):
             )
 
     def step(self, action, *args):
+        print("step env chunking")
         act_exec_horizon = self.act_exec_horizon
         if act_exec_horizon is None:
             action = [action]
@@ -67,6 +69,7 @@ class ChunkingWrapper(gym.Wrapper):
         assert len(action) >= act_exec_horizon
 
         for i in range(act_exec_horizon):
+            print("foreach step env chunking")
             obs, reward, done, trunc, info = self.env.step(action[i], *args)
             self.current_obs.append(obs)
         return (stack_obs(self.current_obs), reward, done, trunc, info)
