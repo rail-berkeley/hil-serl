@@ -370,3 +370,40 @@ class DualExpertIntervWrapper(gym.ActionWrapper):
         info["left"] = self.left
         info["right"] = self.right
         return obs, rew, done, truncated, info
+
+
+class ExpertIntervWrapper(gym.ActionWrapper):
+    def __init__(self, env, action_indices=None):
+        super().__init__(env)
+
+        self.gripper_enabled = True
+        if self.action_space.shape == (6,):
+            self.gripper_enabled = False
+
+        self.action_indices = action_indices
+
+    def action(self, action: np.ndarray) -> np.ndarray:
+        """
+        Input:
+        - action: policy action
+        Output:
+        - action: spacemouse action if nonezero; else, policy action
+        """
+        AgilexMasterControlMode = True
+        if AgilexMasterControlMode:
+            left_action = self.env.curr_end_pos
+            euler = euler_from_quaternion(action[3:])
+            left_action[3:6] = euler
+            left_action[6] = self.env_left.curr_gripper_pos
+            return left_action, True
+
+    def step(self, action):
+        self.env.control_arm = True
+        new_action, replaced = self.action(action)
+        if replaced:
+            self.env.control_arm = False
+
+        obs, rew, done, truncated, info = self.env.step(new_action)
+        if replaced:
+            info["intervene_action"] = new_action
+        return obs, rew, done, truncated, info

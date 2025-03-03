@@ -11,9 +11,7 @@ from serl_launcher.networks.reward_classifier import load_classifier_func
 from experiments.config import DefaultTrainingConfig
 from agilex_env.agilex_env import DefaultEnvConfig
 from agilex_env.agilex_env import AgilexEnv
-from experiments.object_handover_agilex.wrapper import (
-    GripperPenaltyWrapper,
-)
+from experiments.grab_bottole.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
 
 
 class RightEnvConfig(DefaultEnvConfig):
@@ -99,6 +97,7 @@ class TrainConfig(DefaultTrainingConfig):
         # env = DualRelativeFrame(env)
 
         # env = DualQuat2EulerWrapper(env)
+        env = ExpertIntervWrapper(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
 
