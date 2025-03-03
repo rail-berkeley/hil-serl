@@ -85,6 +85,11 @@ while True:
         env._send_gripper_command(0.02)
     elif count == 800:
         count = -1
+    else:
+        time.sleep(0.01)
+        count += 1
+        continue
+
     pose = np.concatenate([position[:3], quaternion_from_euler(euler[0], euler[1], euler[2])])
     print(f"euler: {euler}")
     quat = quaternion_from_euler(euler[0], euler[1], euler[2])

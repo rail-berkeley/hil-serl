@@ -15,6 +15,7 @@ from collections import OrderedDict
 from typing import Dict
 from functools import partial
 from cv_bridge import CvBridge
+from trac_ik_python.trac_ik import IK
 
 import rospy
 from geometry_msgs.msg import Pose
@@ -446,7 +447,8 @@ class AgilexEnv(gym.Env):
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
         arr = np.array(pos).astype(np.float32)
-        print(f"arm {self.config.ARM} send pose command {arr}")
+        joint_angle = self.compute_ik(pos)
+        print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
         pose = Pose()
         pose.position.x, pose.position.y, pose.position.z = arr[:3]
         (
@@ -456,6 +458,16 @@ class AgilexEnv(gym.Env):
             pose.orientation.w,
         ) = arr[3:]
         self.end_pose_pub.publish(pose)
+
+    def compute_ik(self, pos):
+        # 机器人 URDF 里的链定义
+        ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
+        # 目标末端位姿
+        assert len(pos) == 7 
+        # 计算逆运动学
+        qinit = [0.0] * 6
+        joint_angles = ik_solver.get_ik(qinit, *pos)
+        return joint_angles
 
     def _send_gripper_command(self, pos: float):
         """Internal function to send gripper command to the robot."""
