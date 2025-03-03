@@ -16,11 +16,14 @@ from typing import Dict
 from functools import partial
 from cv_bridge import CvBridge
 from trac_ik_python.trac_ik import IK
+from ikpy.chain import Chain
+from scipy.spatial.transform import Rotation as R
 
 import rospy
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState, Image
 from std_msgs.msg import Float64
+from std_msgs.msg import Header
 
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
@@ -244,6 +247,8 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.z)
         end_pose.append(pose_rot.orientation.w)
         self.curr_end_pos = np.array(end_pose)
+        joint_angle = self.compute_ik(end_pose)
+        print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
 
     def update_gripper_state(self, gripper_state):
         #print(f"get gripper val {gripper_state}")
@@ -449,7 +454,10 @@ class AgilexEnv(gym.Env):
         arr = np.array(pos).astype(np.float32)
         joint_angle = self.compute_ik(pos)
         print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
-        self.send_joint_command(joint_angle)
+        if joint_angle is not None:
+            self.send_joint_command(joint_angle)
+        else:
+            print("\033[31mIk Failed\033[0m")
         #pose = Pose()
         #pose.position.x, pose.position.y, pose.position.z = arr[:3]
         #(
@@ -461,14 +469,25 @@ class AgilexEnv(gym.Env):
         #self.end_pose_pub.publish(pose)
 
     def compute_ik(self, pos):
-        # 机器人 URDF 里的链定义
-        ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
-        # 目标末端位姿
-        assert len(pos) == 7 
-        # 计算逆运动学
-        qinit = [0.0] * 6
-        joint_angles = ik_solver.get_ik(qinit, *pos)
-        return joint_angles
+        robot_chain = Chain.from_urdf_file("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_no_gripper_description.urdf")
+        #sub_chain = robot_chain.links[:7]
+        rot_matrix = R.from_quat(pos[3:]).as_matrix()
+        target_transform = np.eye(4)
+        target_transform[:3, :3] = rot_matrix  # 旋转部分
+        print(target_transform[:3, 3])
+        print(np.array(pos[:3]))
+        target_transform[:3, 3] = np.array(pos[:3]) # 平移部分
+        joint_angles = robot_chain.inverse_kinematics_frame(target_transform)
+        return joint_angles[1:]
+
+        ## 机器人 URDF 里的链定义
+        #ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
+        ## 目标末端位姿
+        #assert len(pos) == 7 
+        ## 计算逆运动学
+        #qinit = [0.0] * 6
+        #joint_angles = ik_solver.get_ik(qinit, *pos)
+        #return joint_angles
 
     def send_joint_command(self, joint: np.ndarray):
         joint_state_msg = JointState()
@@ -476,6 +495,7 @@ class AgilexEnv(gym.Env):
         joint_state_msg.header.stamp = rospy.Time.now()
         joint_state_msg.name = ['joint0', 'joint1', 'joint2', 'joint3', 'joint4', 'joint5']
         joint_state_msg.position = joint
+        self.joint_pub.publish(joint_state_msg)
 
     def _send_gripper_command(self, pos: float):
         """Internal function to send gripper command to the robot."""
