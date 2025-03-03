@@ -225,7 +225,7 @@ class AgilexEnv(gym.Env):
             f"{self.topic_prefix}/control_gripper", Float64, queue_size=1
         )
         self.joint_pub = rospy.Publisher(
-            self.topic_prefix + "/control_joint", Pose, queue_size=1
+            self.topic_prefix + "/control_joint", JointState, queue_size=1
         )
 
     def update_curr_joint(self, joint_state):
@@ -449,15 +449,16 @@ class AgilexEnv(gym.Env):
         arr = np.array(pos).astype(np.float32)
         joint_angle = self.compute_ik(pos)
         print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
-        pose = Pose()
-        pose.position.x, pose.position.y, pose.position.z = arr[:3]
-        (
-            pose.orientation.x,
-            pose.orientation.y,
-            pose.orientation.z,
-            pose.orientation.w,
-        ) = arr[3:]
-        self.end_pose_pub.publish(pose)
+        self.send_joint_command(joint_angle)
+        #pose = Pose()
+        #pose.position.x, pose.position.y, pose.position.z = arr[:3]
+        #(
+        #    pose.orientation.x,
+        #    pose.orientation.y,
+        #    pose.orientation.z,
+        #    pose.orientation.w,
+        #) = arr[3:]
+        #self.end_pose_pub.publish(pose)
 
     def compute_ik(self, pos):
         # 机器人 URDF 里的链定义
@@ -468,6 +469,13 @@ class AgilexEnv(gym.Env):
         qinit = [0.0] * 6
         joint_angles = ik_solver.get_ik(qinit, *pos)
         return joint_angles
+
+    def send_joint_command(self, joint: np.ndarray):
+        joint_state_msg = JointState()
+        joint_state_msg.header = Header()
+        joint_state_msg.header.stamp = rospy.Time.now()
+        joint_state_msg.name = ['joint0', 'joint1', 'joint2', 'joint3', 'joint4', 'joint5']
+        joint_state_msg.position = joint
 
     def _send_gripper_command(self, pos: float):
         """Internal function to send gripper command to the robot."""
