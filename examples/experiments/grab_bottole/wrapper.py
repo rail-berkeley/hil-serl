@@ -402,7 +402,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         new_action, replaced = self.action(action)
         if replaced:
             self.env.control_arm = False
-
+            print(f"get interve action {new_action}")
         obs, rew, done, truncated, info = self.env.step(new_action)
         if replaced:
             info["intervene_action"] = new_action

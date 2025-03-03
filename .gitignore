@@ -2,7 +2,7 @@ examples/experiments/object_handover_sim/MUJOCO_LOG.TXT
 examples/experiments/object_handover_agilex/__pycache__
 examples/experiments/object_handover_sim/__pycache__
 examples/experiments/__pycache__
-examples/experiments/grap_bottole/__pycache__
+examples/experiments/grab_bottole/__pycache__
 serl_robot_infra/agilex_env/__pycache__
 serl_robot_infra/franka_env/utils/__pycache__
 serl_robot_infra/serl_robot_infra.egg-info

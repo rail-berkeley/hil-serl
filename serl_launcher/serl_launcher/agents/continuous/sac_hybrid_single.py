@@ -12,7 +12,12 @@ from serl_launcher.common.common import JaxRLTrainState, ModuleDict, nonpytree_f
 from serl_launcher.common.encoding import EncodingWrapper
 from serl_launcher.common.optimizers import make_optimizer
 from serl_launcher.common.typing import Batch, Data, Params, PRNGKey
-from serl_launcher.networks.actor_critic_nets import Critic, Policy, GraspCritic, ensemblize
+from serl_launcher.networks.actor_critic_nets import (
+    Critic,
+    Policy,
+    GraspCritic,
+    ensemblize,
+)
 from serl_launcher.networks.lagrange import GeqLagrangeMultiplier
 from serl_launcher.networks.mlp import MLP
 from serl_launcher.utils.train_utils import _unpack
@@ -25,7 +30,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
      - TD3 (policy_kwargs={"std_parameterization": "fixed", "fixed_std": 0.1})
      - REDQ (critic_ensemble_size=10, critic_subsample_size=2)
      - SAC-ensemble (critic_ensemble_size>>1)
-    
+
     Compared to SACAgent (in sac.py), this agent has a hybrid policy, with the gripper actions
     learned using DQN. Use this agent for single arm setups.
     """
@@ -70,7 +75,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return self.forward_critic(
             observations, actions, rng=rng, grad_params=self.state.target_params
         )
-    
+
     def forward_grasp_critic(
         self,
         observations: Data,
@@ -95,7 +100,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
     def forward_target_grasp_critic(
         self,
-        observations: Data, 
+        observations: Data,
         rng: PRNGKey,
     ) -> jax.Array:
         """
@@ -106,7 +111,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             observations, rng=rng, grad_params=self.state.target_params
         )
 
-    def forward_policy( # type: ignore              
+    def forward_policy(  # type: ignore
         self,
         observations: Data,
         rng: Optional[PRNGKey] = None,
@@ -160,8 +165,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         next_action_distributions = self.forward_policy(
             batch["next_observations"], rng=rng
         )
-        
-        next_actions, next_actions_log_probs = next_action_distributions.sample_and_log_prob(seed=rng)
+
+        next_actions, next_actions_log_probs = (
+            next_action_distributions.sample_and_log_prob(seed=rng)
+        )
         chex.assert_shape(next_actions_log_probs, (batch_size,))
 
         return next_actions, next_actions_log_probs
@@ -228,15 +235,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
 
         return critic_loss, info
-    
 
     def grasp_critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
 
         batch_size = batch["rewards"].shape[0]
-        grasp_action = (batch["actions"][..., -1]).astype(jnp.int16) + 1 # Cast env action from [-1, 1] to {0, 1, 2}
+        grasp_action = (batch["actions"][..., -1]).astype(
+            jnp.int16
+        ) + 1  # Cast env action from [-1, 1] to {0, 1, 2}
 
-         # Evaluate next grasp Qs for all ensemble members (cheap because we're only doing the forward pass)
+        # Evaluate next grasp Qs for all ensemble members (cheap because we're only doing the forward pass)
         target_next_grasp_qs = self.forward_target_grasp_critic(
             batch["next_observations"],
             rng=rng,
@@ -249,14 +257,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             rng=rng,
         )
         # For DQN, select actions using online network, evaluate with target network
-        best_next_grasp_action = next_grasp_qs.argmax(axis=-1) 
+        best_next_grasp_action = next_grasp_qs.argmax(axis=-1)
         chex.assert_shape(best_next_grasp_action, (batch_size,))
-        
-        target_next_grasp_q = target_next_grasp_qs[jnp.arange(batch_size), best_next_grasp_action]
+
+        target_next_grasp_q = target_next_grasp_qs[
+            jnp.arange(batch_size), best_next_grasp_action
+        ]
         chex.assert_shape(target_next_grasp_q, (batch_size,))
 
         # Compute target Q-values
-        grasp_rewards = batch["rewards"] + batch["grasp_penalty"]
+        grasp_rewards = batch["rewards"]  # + batch["grasp_penalty"]
         target_grasp_q = (
             grasp_rewards
             + self.config["discount"] * batch["masks"] * target_next_grasp_q
@@ -265,16 +275,14 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         # Forward pass through the online grasp critic to get predicted Q-values
         predicted_grasp_qs = self.forward_grasp_critic(
-            batch["observations"], 
-            rng=rng, 
-            grad_params=params
+            batch["observations"], rng=rng, grad_params=params
         )
         chex.assert_shape(predicted_grasp_qs, (batch_size, 3))
-        
+
         # Select the predicted Q-values for the taken grasp actions in the batch
         predicted_grasp_q = predicted_grasp_qs[jnp.arange(batch_size), grasp_action]
         chex.assert_shape(predicted_grasp_q, (batch_size,))
-        
+
         # Compute MSE loss between predicted and target Q-values
         chex.assert_equal_shape([predicted_grasp_q, target_grasp_q])
         grasp_critic_loss = jnp.mean((predicted_grasp_q - target_grasp_q) ** 2)
@@ -287,7 +295,6 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
 
         return grasp_critic_loss, info
-
 
     def policy_loss_fn(self, batch, params: Params, rng: PRNGKey):
         batch_size = batch["rewards"].shape[0]
@@ -331,7 +338,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             grad_params=params,
         )
         return temperature_loss, {"temperature_loss": temperature_loss}
-    
+
     def loss_fns(self, batch):
         return {
             "critic": partial(self.critic_loss_fn, batch),
@@ -349,7 +356,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         networks_to_update: FrozenSet[str] = frozenset(
             {"actor", "critic", "grasp_critic", "temperature"}
         ),
-        **kwargs
+        **kwargs,
     ) -> Tuple["SACAgentHybridSingleArm", dict]:
         """
         Take one gradient step on all (or a subset) of the networks in the agent.
@@ -371,7 +378,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if self.config["image_keys"][0] not in batch["next_observations"]:
             batch = _unpack(batch)
         rng, aug_rng = jax.random.split(self.state.rng)
-        if "augmentation_function" in self.config.keys() and self.config["augmentation_function"] is not None:
+        if (
+            "augmentation_function" in self.config.keys()
+            and self.config["augmentation_function"] is not None
+        ):
             batch = self.config["augmentation_function"](batch, aug_rng)
 
         batch = batch.copy(
@@ -428,13 +438,15 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             ee_actions = dist.mode()
         else:
             ee_actions = dist.sample(seed=seed)
-        
+
         seed, grasp_key = jax.random.split(seed, 2)
-        grasp_q_values = self.forward_grasp_critic(observations, rng=grasp_key, train=False)
-        
+        grasp_q_values = self.forward_grasp_critic(
+            observations, rng=grasp_key, train=False
+        )
+
         # Select grasp actions based on the grasp Q-values
         grasp_action = grasp_q_values.argmax(axis=-1)
-        grasp_action = grasp_action - 1 # Mapping back to {-1, 0, 1}
+        grasp_action = grasp_action - 1  # Mapping back to {-1, 0, 1}
 
         return jnp.concatenate([ee_actions, grasp_action[..., None]], axis=-1)
 
@@ -624,16 +636,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         critic_def = partial(
             Critic, encoder=encoders["critic"], network=critic_backbone
         )(name="critic")
-        
+
         grasp_critic_backbone = MLP(**grasp_critic_network_kwargs)
         grasp_critic_def = partial(
             GraspCritic, encoder=encoders["grasp_critic"], network=grasp_critic_backbone
         )(name="grasp_critic")
-        
+
         policy_def = Policy(
             encoder=encoders["actor"],
             network=MLP(**policy_network_kwargs),
-            action_dim=actions.shape[-1]-1,
+            action_dim=actions.shape[-1] - 1,
             **policy_kwargs,
             name="actor",
         )
@@ -662,6 +674,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         if "pretrained" in encoder_type:  # load pretrained weights for ResNet-10
             from serl_launcher.utils.train_utils import load_resnet10_params
+
             agent = load_resnet10_params(agent, image_keys)
 
         return agent
