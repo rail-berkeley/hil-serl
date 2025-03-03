@@ -117,7 +117,9 @@ class AgilexEnv(gym.Env):
         self.curr_gripper_pos = [0.0]
         self.wrist_img = {}
         self.cv_bridge = CvBridge()
+        self.control_arm = False
         if not fake_env:
+            self.control_arm = True
             self.init_pub_sub_node()
         # convert last 3 elements from euler to quat, from size (6,) to (7,)
         self.resetpos = np.concatenate(
@@ -195,7 +197,7 @@ class AgilexEnv(gym.Env):
         #    self.listener = keyboard.Listener(on_press=on_press)
         #    self.listener.start()
 
-        print("Initialized Franka")
+        print("Initialized Agilex")
 
     def init_pub_sub_node(self):
         print("Init node")
@@ -236,8 +238,6 @@ class AgilexEnv(gym.Env):
         #print(f"joint state: {self.curr_joint}")
 
     def update_curr_end_pos(self, pose_rot):
-        #print(f"end pose {pose_rot.position}")
-        #print(f"end rotate {pose_rot.orientation}")
         end_pose = []
         end_pose.append(pose_rot.position.x)
         end_pose.append(pose_rot.position.y)
@@ -248,7 +248,7 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.w)
         self.curr_end_pos = np.array(end_pose)
         joint_angle = self.compute_ik(end_pose)
-        print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
+        #print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
 
     def update_gripper_state(self, gripper_state):
         #print(f"get gripper val {gripper_state}")
@@ -303,9 +303,9 @@ class AgilexEnv(gym.Env):
         ).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
-
-        self._send_gripper_command(gripper_action)
-        self._send_pos_command(self.clip_safety_box(self.nextpos))
+        if self.control_arm:
+            self._send_gripper_command(gripper_action)
+            self._send_pos_command(self.clip_safety_box(self.nextpos))
 
         self.curr_path_length += 1
         dt = time.time() - start_time
@@ -453,7 +453,7 @@ class AgilexEnv(gym.Env):
         """Internal function to send position command to the robot."""
         arr = np.array(pos).astype(np.float32)
         joint_angle = self.compute_ik(pos)
-        print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
+        #print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
         if joint_angle is not None:
             self.send_joint_command(joint_angle)
         else:
@@ -474,8 +474,6 @@ class AgilexEnv(gym.Env):
         rot_matrix = R.from_quat(pos[3:]).as_matrix()
         target_transform = np.eye(4)
         target_transform[:3, :3] = rot_matrix  # 旋转部分
-        print(target_transform[:3, 3])
-        print(np.array(pos[:3]))
         target_transform[:3, 3] = np.array(pos[:3]) # 平移部分
         joint_angles = robot_chain.inverse_kinematics_frame(target_transform)
         return joint_angles[1:]

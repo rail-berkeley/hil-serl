@@ -218,7 +218,7 @@ class DualRelativeFrame(gym.Wrapper):
         # action is assumed to be (x, y, z, rx, ry, rz, gripper)
         # Transform action from end-effector frame to base frame
         transformed_action = self.transform_action(action)
-        print(f"transformed_action: {transformed_action}")
+        #print(f"transformed_action: {transformed_action}")
         obs, reward, done, truncated, info = self.env.step(transformed_action)
 
         # this is to convert the spacemouse intervention action
@@ -313,3 +313,49 @@ class DualRelativeFrame(gym.Wrapper):
         else:
             raise ValueError("Action dimension not supported")
         return action
+
+
+class DualExpertIntervWrapper(gym.ActionWrapper):
+    def __init__(self, env, action_indices=None):
+        super().__init__(env)
+
+        self.gripper_enabled = True
+        if self.action_space.shape == (6,):
+            self.gripper_enabled = False
+
+        self.expert = SpaceMouseExpert()
+        self.left, self.right = False, False
+        self.action_indices = action_indices
+
+    def action(self, action: np.ndarray) -> np.ndarray:
+        """
+        Input:
+        - action: policy action
+        Output:
+        - action: spacemouse action if nonezero; else, policy action
+        """
+        AgilexMasterControlMode = True
+        if AgilexMasterControlMode:
+            left_action = self.env_left.curr_end_pos
+            euler = euler_from_quaternion(action[3:])
+            left_action[3:6] = euler
+            left_action[6] = self.env_left.curr_gripper_pos
+            right_action = self.env_right.curr_end_pos
+            euler = euler_from_quaternion(action[3:])
+            right_action[3:6] = euler
+            right_action[6] = self.env_right.curr_gripper_pos
+            action = np.concatenate(left_action, right_action)
+            return action, True
+
+    def step(self, action):
+        self.env.control_arm = True
+        new_action, replaced = self.action(action)
+        if replaced:
+            self.env.control_arm = False
+
+        obs, rew, done, truncated, info = self.env.step(new_action)
+        if replaced:
+            info["intervene_action"] = new_action
+        info["left"] = self.left
+        info["right"] = self.right
+        return obs, rew, done, truncated, info

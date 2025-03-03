@@ -11,39 +11,46 @@ from experiments.mappings import CONFIG_MAPPING
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
-flags.DEFINE_integer("successes_needed", 200, "Number of successful transistions to collect.")
+flags.DEFINE_integer(
+    "successes_needed", 200, "Number of successful transistions to collect."
+)
 
 
 success_key = False
+
+
 def on_press(key):
     global success_key
     try:
-        if str(key) == 'Key.space':
+        if str(key) == "Key.space":
             success_key = True
     except AttributeError:
         pass
 
+
 def main(_):
     global success_key
-    listener = keyboard.Listener(
-        on_press=on_press)
+    listener = keyboard.Listener(on_press=on_press)
     listener.start()
-    assert FLAGS.exp_name in CONFIG_MAPPING, 'Experiment folder not found.'
+    assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
     env = config.get_environment(fake_env=False, save_video=False, classifier=False)
 
-    obs, _ = env.reset()  # obs: currpos, currvel, curr_gripper_pos, currforce, currtorque
+    obs, _ = (
+        env.reset()
+    )  # obs: currpos, currvel, curr_gripper_pos, currforce, currtorque
     successes = []
     failures = []
     success_needed = FLAGS.successes_needed
     pbar = tqdm(total=success_needed)
-    
+
     while len(successes) < success_needed:
-        actions = np.zeros(env.action_space.sample().shape) 
+        actions = np.zeros(env.action_space.sample().shape)
         next_obs, rew, done, truncated, info = env.step(actions)
         if "intervene_action" in info:
             actions = info["intervene_action"]
-
+        print(f"action: {actions}")
+        print(f"press success key {success_key}")
         transition = copy.deepcopy(
             dict(
                 observations=obs,
@@ -68,7 +75,9 @@ def main(_):
     if not os.path.exists("./classifier_data"):
         os.makedirs("./classifier_data")
     uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"./classifier_data/{FLAGS.exp_name}_{success_needed}_success_images_{uuid}.pkl"
+    file_name = (
+        f"./classifier_data/{FLAGS.exp_name}_{success_needed}_success_images_{uuid}.pkl"
+    )
     with open(file_name, "wb") as f:
         pkl.dump(successes, f)
         print(f"saved {success_needed} successful transitions to {file_name}")
@@ -77,6 +86,7 @@ def main(_):
     with open(file_name, "wb") as f:
         pkl.dump(failures, f)
         print(f"saved {len(failures)} failure transitions to {file_name}")
-        
+
+
 if __name__ == "__main__":
     app.run(main)
