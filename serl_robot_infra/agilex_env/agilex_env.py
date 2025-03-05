@@ -306,12 +306,14 @@ class AgilexEnv(gym.Env):
         gripper_action = action[6] * self.action_scale[2]
         if self.control_arm:
             self._send_gripper_command(gripper_action)
-            self._send_pos_command(self.clip_safety_box(self.nextpos))
+            cliped_pos = self.clip_safety_box(self.nextpos)
+            print(f"send step action: {cliped_pos}")
+            self._send_pos_command(cliped_pos)
 
         self.curr_path_length += 1
         dt = time.time() - start_time
         time.sleep(max(0, (1.0 / self.hz) - dt))
-
+        print(f"actual pos: {self.curr_end_pos}")
         self._update_curr_end_pos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)
