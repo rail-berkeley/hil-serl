@@ -40,7 +40,10 @@ def main(_):
         include_label=True,
     )
 
-    success_paths = glob.glob(os.path.join(os.getcwd(), "classifier_data", "*success*.pkl"))
+    search_path = os.path.join(os.getcwd(), "classifier_data", "*success*.pkl")
+    success_paths = glob.glob(search_path)
+    print(f"search path {search_path}")
+    print(f"success {len(success_paths)}")
     for path in success_paths:
         success_data = pkl.load(open(path, "rb"))
         for trans in success_data:
@@ -72,6 +75,7 @@ def main(_):
         for trans in failure_data:
             if "images" in trans['observations'].keys():
                 continue
+            print(trans)
             trans["labels"] = 0
             trans['actions'] = env.action_space.sample()
             neg_buffer.insert(trans)

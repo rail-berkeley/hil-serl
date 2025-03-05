@@ -49,7 +49,7 @@ def main(_):
         next_obs, rew, done, truncated, info = env.step(actions)
         if "intervene_action" in info:
             actions = info["intervene_action"]
-        print(f"action: {actions}")
+        #print(f"action: {actions}")
         print(f"press success key {success_key}")
         transition = copy.deepcopy(
             dict(

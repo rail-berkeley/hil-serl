@@ -121,6 +121,7 @@ class AgilexEnv(gym.Env):
         if not fake_env:
             self.control_arm = True
             self.init_pub_sub_node()
+            self.ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
         # convert last 3 elements from euler to quat, from size (6,) to (7,)
         self.resetpos = np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
@@ -234,7 +235,7 @@ class AgilexEnv(gym.Env):
         )
 
     def update_curr_joint(self, joint_state):
-        self.curr_joint = joint_state.position
+        self.curr_joint = list(joint_state.position)
         #print(f"joint state: {self.curr_joint}")
 
     def update_curr_end_pos(self, pose_rot):
@@ -247,7 +248,7 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.z)
         end_pose.append(pose_rot.orientation.w)
         self.curr_end_pos = np.array(end_pose)
-        joint_angle = self.compute_ik(end_pose)
+        #joint_angle = self.compute_ik(end_pose)
         #print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
 
     def update_gripper_state(self, gripper_state):
@@ -451,9 +452,11 @@ class AgilexEnv(gym.Env):
 
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
+        if not self.control_arm:
+            return
         arr = np.array(pos).astype(np.float32)
         joint_angle = self.compute_ik(pos)
-        #print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
+        print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
         if joint_angle is not None:
             self.send_joint_command(joint_angle)
         else:
@@ -469,23 +472,33 @@ class AgilexEnv(gym.Env):
         #self.end_pose_pub.publish(pose)
 
     def compute_ik(self, pos):
-        robot_chain = Chain.from_urdf_file("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_no_gripper_description.urdf")
-        #sub_chain = robot_chain.links[:7]
-        rot_matrix = R.from_quat(pos[3:]).as_matrix()
-        target_transform = np.eye(4)
-        target_transform[:3, :3] = rot_matrix  # 旋转部分
-        target_transform[:3, 3] = np.array(pos[:3]) # 平移部分
-        joint_angles = robot_chain.inverse_kinematics_frame(target_transform)
-        return joint_angles[1:]
+        # 机器人 URDF 里的链定义
+        try:
+            # 目标末端位姿
+            assert len(pos) == 7 
+            # 计算逆运动学
+            qinit = [0.0] * 6
+            joint_angles = self.ik_solver.get_ik(self.curr_joint, *pos, 0.01, 0.01, 0.01, 0.1, 0.1, 0.1)
+            #if joint_angles is not None:
+            return joint_angles
+        except:
+            print("solve failed")
+            return [0.0]*6
 
-        ## 机器人 URDF 里的链定义
-        #ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
-        ## 目标末端位姿
-        #assert len(pos) == 7 
-        ## 计算逆运动学
-        #qinit = [0.0] * 6
-        #joint_angles = ik_solver.get_ik(qinit, *pos)
-        #return joint_angles
+        #robot_chain = Chain.from_urdf_file("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_no_gripper_description.urdf")
+        ##reachable = robot_chain.is_reachable(pos[:3])
+        ##if not reachable:
+        ##        print("目标点不可达，请调整目标位置！")
+        ##sub_chain = robot_chain.links[:7]
+        #rot_matrix = R.from_quat(pos[3:]).as_matrix()
+        #target_transform = np.eye(4)
+        #target_transform[:3, :3] = rot_matrix  # 旋转部分
+        #target_transform[:3, 3] = np.array(pos[:3]) # 平移部分
+        #print(self.curr_joint)
+        #initial_joint = [0.0] + self.curr_joint
+        #joint_angles = robot_chain.inverse_kinematics_frame(target_transform, initial_position=initial_joint, max_iter=1000)
+        #print(f"iky joint_angles, {joint_angles}")
+        #return joint_angles[1:]
 
     def send_joint_command(self, joint: np.ndarray):
         joint_state_msg = JointState()

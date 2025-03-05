@@ -3,6 +3,9 @@ import threading
 import time
 from typing import OrderedDict
 
+from tf.transformations import quaternion_from_euler  # 用于欧拉角到四元数的转换
+from tf.transformations import euler_from_quaternion  # 用于欧拉角到四元数的转换
+
 # from franka_env.utils.rotations import euler_2_quat
 import gymnasium as gym
 import numpy as np
@@ -389,13 +392,15 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         Output:
         - action: spacemouse action if nonezero; else, policy action
         """
-        AgilexMasterControlMode = True
+        AgilexMasterControlMode = False
         if AgilexMasterControlMode:
             left_action = self.env.curr_end_pos
-            euler = euler_from_quaternion(action[3:])
+            euler = euler_from_quaternion(left_action[3:])
             left_action[3:6] = euler
-            left_action[6] = self.env_left.curr_gripper_pos
+            left_action[6] = self.env.curr_gripper_pos[0]
             return left_action, True
+        else:
+            return action, False
 
     def step(self, action):
         self.env.control_arm = True

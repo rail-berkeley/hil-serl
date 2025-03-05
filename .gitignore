@@ -8,4 +8,5 @@ serl_robot_infra/franka_env/utils/__pycache__
 serl_robot_infra/serl_robot_infra.egg-info
 serl_robot_infra/franka_env/camera/__pycache__
 serl_robot_infra/franka_env/envs/__pycache__
+serl_robot_infra/franka_env/spacemouse/__pycache__
     

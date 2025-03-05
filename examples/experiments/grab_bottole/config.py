@@ -12,6 +12,9 @@ from experiments.config import DefaultTrainingConfig
 from agilex_env.agilex_env import DefaultEnvConfig
 from agilex_env.agilex_env import AgilexEnv
 from experiments.grab_bottole.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
+from franka_env.envs.wrappers import (
+    MultiCameraBinaryRewardClassifierWrapper,
+)
 
 
 class RightEnvConfig(DefaultEnvConfig):
@@ -72,22 +75,22 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["left/wrist", "right/wrist", "left/front"]
-    classifier_keys = ["left/side_classifier"]
+    image_keys = ["wrist", "front"]
+    classifier_keys = ["front"]
     proprio_keys = [
-        "right/tcp_pose",
-        "right/tcp_vel",
-        "right/gripper_pose",
+        "tcp_pose",
+        "tcp_vel",
+        "gripper_pose",
     ]
     buffer_period = 1000
     checkpoint_period = 5000
     steps_per_update = 50
     encoder_type = "resnet-pretrained"
-    setup_mode = "dual-arm-learned-gripper"
+    setup_mode = "single-arm-learned-gripper"
 
     def get_environment(self, fake_env=False, save_video=False, classifier=False):
         env = AgilexEnv(
-            config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
+            hz=3, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         # if not fake_env:
         #    env = DualSpacemouseIntervention(env, gripper_enabled=True)
@@ -101,19 +104,21 @@ class TrainConfig(DefaultTrainingConfig):
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
 
-        # if classifier and self.classifier_keys is not None:
-        #    classifier = load_classifier_func(
-        #        key=jax.random.PRNGKey(0),
-        #        sample=env.observation_space.sample(),
-        #        image_keys=self.classifier_keys,
-        #        checkpoint_path=os.path.abspath("classifier_ckpt/"),
-        #    )
+        if classifier and self.classifier_keys is not None:
+           classifier = load_classifier_func(
+               key=jax.random.PRNGKey(0),
+               sample=env.observation_space.sample(),
+               image_keys=self.classifier_keys,
+               checkpoint_path=os.path.abspath("classifier_ckpt/"),
+           )
 
-        #    def reward_func(obs):
-        #        sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
-        #        p = sigmoid(classifier(obs))
-        #        return int(p > 0.75 and obs['state'][0, 0] > 0.5)
+           def reward_func(obs):
+               sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
+               p = sigmoid(classifier(obs))
+               print(f"reward: {p}")
+               #return int(p > 0.75 and obs['state'][0, 0] > 0.5)
+               return int(p[0] > 0.75)
 
-        #    env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
+           env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
         # env = GripperPenaltyWrapper(env, penalty=-0.02)
         return env
