@@ -430,7 +430,7 @@ def main(_):
             encoder_type=config.encoder_type,
             discount=config.discount,
         )
-        include_grasp_penalty = False
+        include_grasp_penalty = True
     elif config.setup_mode == "dual-arm-learned-gripper":
         agent: SACAgentHybridDualArm = make_sac_pixel_agent_hybrid_dual_arm(
             seed=FLAGS.seed,
@@ -447,7 +447,6 @@ def main(_):
     # replicate agent across devices
     # need the jnp.array to avoid a bug where device_put doesn't recognize primitives
     agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
-    include_grasp_penalty = False
 
     if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
         input("Checkpoint path already exists. Press Enter to resume training.")

@@ -105,20 +105,20 @@ class TrainConfig(DefaultTrainingConfig):
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
 
         if classifier and self.classifier_keys is not None:
-           classifier = load_classifier_func(
-               key=jax.random.PRNGKey(0),
-               sample=env.observation_space.sample(),
-               image_keys=self.classifier_keys,
-               checkpoint_path=os.path.abspath("classifier_ckpt/"),
-           )
+            classifier = load_classifier_func(
+                key=jax.random.PRNGKey(0),
+                sample=env.observation_space.sample(),
+                image_keys=self.classifier_keys,
+                checkpoint_path=os.path.abspath("classifier_ckpt/"),
+            )
 
-           def reward_func(obs):
-               sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
-               p = sigmoid(classifier(obs))
-               print(f"reward: {p}")
-               #return int(p > 0.75 and obs['state'][0, 0] > 0.5)
-               return int(p[0] > 0.75)
+            def reward_func(obs):
+                sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
+                p = sigmoid(classifier(obs))
+                print(f"reward: {p}")
+                # return int(p > 0.75 and obs['state'][0, 0] > 0.5)
+                return int(p[0] > 0.75)
 
-           env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
-        # env = GripperPenaltyWrapper(env, penalty=-0.02)
+            env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
+        env = GripperPenaltyWrapper(env, penalty=-0.02)
         return env
