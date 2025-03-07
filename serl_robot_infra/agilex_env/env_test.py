@@ -76,11 +76,11 @@ env = AgilexEnv(
 count = 0
 while True:
     if count == 0:
-        position = [0.277, 0.07, 0.267, 0, 84.0, 0, 0]
+        position = [0.277, 0.07, 0.267, 45, 90.0, 0, 0]
         euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
         env._send_gripper_command(0.06)
     elif count == 400:
-        position = [0.237, -0.07, 0.367, 0, 84.0, 0, 0]
+        position = [0.237, -0.07, 0.367, 0, 90.0, 0, 0]
         euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
         env._send_gripper_command(0.02)
     elif count == 800:

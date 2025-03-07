@@ -136,14 +136,13 @@ class DualAgilexEnv(AgilexEnv):
 class GripperPenaltyWrapper(gym.Wrapper):
     def __init__(self, env, penalty=-0.05):
         super().__init__(env)
-        assert env.action_space.shape == (14,)
+        assert env.action_space.shape == (7,)
         self.penalty = penalty
         self.last_left_gripper_pos = None
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         self.last_left_gripper_pos = obs["state"][0, 0]
-        self.last_right_gripper_pos = obs["state"][0, 19]
         return obs, info
 
     def step(self, action):
@@ -160,14 +159,7 @@ class GripperPenaltyWrapper(gym.Wrapper):
             info["grasp_penalty"] += self.penalty
             print("left grasp penalty")
 
-        if (action[13] < -0.5 and self.last_right_gripper_pos > 0.85) or (
-            action[13] > 0.5 and self.last_right_gripper_pos < 0.85
-        ):
-            info["grasp_penalty"] += self.penalty
-            print("right grasp penalty")
-
         self.last_left_gripper_pos = observation["state"][0, 0]
-        self.last_right_gripper_pos = observation["state"][0, 13]
 
         return observation, reward, terminated, truncated, info
 

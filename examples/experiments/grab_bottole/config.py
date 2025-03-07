@@ -24,8 +24,8 @@ class RightEnvConfig(DefaultEnvConfig):
         "front": "/camera_f/color/image_raw",
     }
     RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
-    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.20, np.pi - 0.01, 0.0, np.pi - 0.01])
-    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, np.pi + 0.01, 0.3, np.pi + 0.01])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.20, -0.5, 0.0, -1.04])
+    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.5, 0.9, 1.57])
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
     DISPLAY_IMAGE = False
@@ -90,7 +90,7 @@ class TrainConfig(DefaultTrainingConfig):
 
     def get_environment(self, fake_env=False, save_video=False, classifier=False):
         env = AgilexEnv(
-            hz=3, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
+            hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         # if not fake_env:
         #    env = DualSpacemouseIntervention(env, gripper_enabled=True)
