@@ -18,6 +18,7 @@ from cv_bridge import CvBridge
 from trac_ik_python.trac_ik import IK
 from ikpy.chain import Chain
 from scipy.spatial.transform import Rotation as R
+from ik_solver import Arm_IK
 
 import rospy
 from geometry_msgs.msg import Pose
@@ -122,6 +123,7 @@ class AgilexEnv(gym.Env):
             self.control_arm = True
             self.init_pub_sub_node()
             self.ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
+            self.pinco_ik_solver = Arm_IK(urdf_path="")
         # convert last 3 elements from euler to quat, from size (6,) to (7,)
         self.resetpos = np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
@@ -478,10 +480,9 @@ class AgilexEnv(gym.Env):
         try:
             # 目标末端位姿
             assert len(pos) == 7 
-            # 计算逆运动学
-            qinit = [0.0] * 6
-            joint_angles = self.ik_solver.get_ik(self.curr_joint, *pos, 0.01, 0.01, 0.01, 1.3, 1.3, 1.3)
-            #if joint_angles is not None:
+            #qinit = [0.0] * 6
+            #joint_angles = self.ik_solver.get_ik(self.curr_joint, *pos, 0.01, 0.01, 0.01, 0.1, 0.1, 0.1)
+            joint_angles = self.pinco_ik_solver.get_ik_solution(pos)
             return joint_angles
         except:
             print("solve failed")
