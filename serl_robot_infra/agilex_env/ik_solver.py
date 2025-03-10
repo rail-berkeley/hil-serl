@@ -143,14 +143,14 @@ class Arm_IK:
             # sol_q = self.opti.debug.value(self.var_q)   # return original value
             return sol_q, "", False
 
-        def get_ik_solution(self, q):
-            # q = R.from_euler("XYZ", (roll, pitch, yaw)).as_quat()
-            target = pin.SE3(
-                pin.Quaternion(q[6], q[3], q[4], q[5]),
-                np.array(q[:3]),
-            )
-            sol_q, tau_ff, get_result = self.ik_fun(target.homogeneous, 0)
-            # print("result:", sol_q)
-            return sol_q
+    def get_ik_solution(self, q):
+        # q = R.from_euler("XYZ", (roll, pitch, yaw)).as_quat()
+        target = pin.SE3(
+            pin.Quaternion(q[6], q[3], q[4], q[5]),
+            np.array(q[:3]),
+        )
+        sol_q, tau_ff, get_result = self.ik_fun(target.homogeneous, 0)
+        # print("result:", sol_q)
+        return sol_q
 
 

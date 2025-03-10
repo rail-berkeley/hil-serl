@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any, Literal, Tuple, Dict
 
-from trac_ik_python.trac_ik import IK
+#from trac_ik_python.trac_ik import IK
+from agilex_env.ik_solver import Arm_IK
 
 import gymnasium as gym
 import mujoco
@@ -114,8 +115,7 @@ class AgilexGrabGymEnv(MujocoGymEnv):
             np.ones((7,), dtype=np.float32),
         )
 
-
-        self.ik_solver = IK("base_link", "link6", urdf_string=open("/Users/anker/Robotics/cobot_magic/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
+        self.pinco_ik_solver = Arm_IK(urdf_path="/Users/anker/Robotics/cobot_magic/Piper_ros/src/piper_description/urdf/piper_description.urdf")
 
         print("init observation ", self.observation_space)
         # NOTE: gymnasium is used here since MujocoRenderer is not available in gym. It
@@ -157,16 +157,17 @@ class AgilexGrabGymEnv(MujocoGymEnv):
         return obs, {}
 
 
-    def compute_ik(self, ik_solver, pos, curr_joint):
+    def compute_ik(self,pos, curr_joint):
         # 机器人 URDF 里的链定义
         try:
             # 目标末端位姿
             assert len(pos) == 7
             # 计算逆运动学
             qinit = [0.0] * 6
-            joint_angles = ik_solver.get_ik(
-                curr_joint, *pos, 0.01, 0.01, 0.01, 999, 999, 999
-            )
+            #joint_angles = self.ik_solver.get_ik(
+            #    curr_joint, *pos, 0.01, 0.01, 0.01, 999, 999, 999
+            #)
+            joint_angles = self.pinco_ik_solver.get_ik_solution(pos)
             if joint_angles is not None:
                 return joint_angles
             else:
@@ -207,7 +208,7 @@ class AgilexGrabGymEnv(MujocoGymEnv):
         self._data.ctrl[self._left_gripper_ctrl_id[0]] = ng * 255
         quat = R.from_euler('xyz', action[3:7]).as_quat()
         quat_pos = single_arm[0:3] + quat
-        joint = self.compute_ik(self.ik_solver, quat_pos, [0.0]*6)
+        joint = self.compute_ik(quat_pos, [0.0]*6)
         self._data.ctrl[self._left_ctrl_ids] = joint 
         mujoco.mj_step(self._model, self._data)
 
