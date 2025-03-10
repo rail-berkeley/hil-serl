@@ -430,7 +430,7 @@ def main(_):
             encoder_type=config.encoder_type,
             discount=config.discount,
         )
-        include_grasp_penalty = True
+        include_grasp_penalty = False
     elif config.setup_mode == "dual-arm-learned-gripper":
         agent: SACAgentHybridDualArm = make_sac_pixel_agent_hybrid_dual_arm(
             seed=FLAGS.seed,
@@ -474,7 +474,7 @@ def main(_):
             description=FLAGS.exp_name,
             debug=FLAGS.debug,
         )
-        return replay_buffer, wandb_logger
+        return replay_buffer, None #wandb_logger
 
     if FLAGS.learner:
         sampling_rng = jax.device_put(sampling_rng, device=sharding.replicate())

@@ -24,4 +24,9 @@ register(
     max_episode_steps=100,
     kwargs={"image_obs": True},
 )
-
+register(
+    id="AgilexGrab-v0",
+    entry_point="franka_sim.agilex_grab_env:AgilexGrabGymEnv",
+    max_episode_steps=100,
+    kwargs={"image_obs": True},
+)

@@ -1,0 +1,105 @@
+<mujoco model="aloha_description">
+  <compiler angle='radian' meshdir="./meshes_mujoco/" />
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2=".6 .8 1" width="256" height="256"/>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="1 1 1" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+    <mesh name="table" scale="0.001 0.001 0.001" file="table.STL"/>
+    <mesh name="base_link_aloha" file="base_link_aloha.STL"/>
+    <mesh name="box1_Link" file="box1_Link.STL"/>
+    <mesh name="box2_Link" file="box2_Link.STL"/>
+    <mesh name="base_link" file="base_link.STL"/>
+    <mesh name="link1" file="link1.STL"/>
+    <mesh name="link2" file="link2.STL"/>
+    <mesh name="link3" file="link3.STL"/>
+    <mesh name="link4" file="link4.STL"/>
+    <mesh name="link5" file="link5.STL"/>
+    <mesh name="link6" file="link6.STL"/>
+    <mesh name="link7" file="link7.STL"/>
+    <mesh name="link8" file="link8.STL"/>
+    <mesh name="dabai" file="dabai.STL"/>
+  </asset>
+  <worldbody>
+    <light diffuse=".7 .7 .7" pos="0 0 5" dir="0 0 -1"/>
+    <geom type="plane" size="3 2 .01" material="grid"/>
+    <geom pos="0.5 0.65 0" quat="0.707 0.707 0 0" type="mesh" group="1" density="0.950" rgba="0.79216 0.81961 0.93333 1" mesh="table"/>
+    <geom pos="0 0 0" euler="0 0 0" type="mesh" group="1" density="7.85" rgba="0.79216 0.81961 0.93333 1" mesh="base_link_aloha"/>
+    <geom pos="0 0 0.155" euler="0 0 0" type="mesh" group="1" density="7.85" rgba="0.79216 0.81961 0.93333 1" mesh="box2_Link"/>
+    <geom pos="0.2 -0.01 0.863" euler="0 1.57 1.57" type="mesh" group="1" density="2.83" rgba="0.898039 0.917647 0.929412 1" mesh="dabai"/>
+    <camera name="f_dabai" pos="0.2079 -0.01 0.863" euler="0 -1.57 -1.57" fovy="41" />
+    <geom pos="0.233 0.3 0.761" type="mesh" density="2.83" rgba="0.75294 0.75294 0.75294 1" mesh="base_link"/>
+    <geom pos="0.234 -0.303 0.761" type="mesh" density="2.83" rgba="0.75294 0.75294 0.75294 1" mesh="base_link"/>
+    <body name="block" pos="0.9 0 0.8">
+      <freejoint name="block"/>
+      <geom name="block" type="box" size=".02 .02 .02" mass="0.1" rgba=".6 .3 .6 1"/>
+    </body>
+
+    <body name="fl_link1" pos="0.233 0.3 0.884" euler="0 0 -1.57079632679">
+      <inertial pos="0.00131676 0.000310289 -0.00922875" quat="0.557105 0.432155 0.377373 0.600388" mass="0.097868" diaginertia="9.25942e-05 8.3083e-05 7.69469e-05"/>
+      <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link1"/>
+      <joint name="fl_joint1" pos="0 0 0" axis="0 0 1" limited="true" range="-2.618 2.618"/>
+      <body name="fl_link2" pos="0 0 0" euler="1.57079632679 -1.57079632679 0">
+        <inertial pos="0.148794 -0.00242027 0.00175155" quat="-0.0249063 0.70684 0.00803509 0.706889" mass="0.290889" diaginertia="0.00177549 0.00173142 0.00014552"/>
+        <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link2"/>
+        <joint name="fl_joint2" pos="0 0 0" axis="0 0 1" limited="true" range="0 3.14"/>
+        <body name="fl_link3" pos="0.28358 0 0" euler="0 0 -0.10095">
+          <inertial pos="-0.0996835 0.0349477 0.000508026" quat="0.0777021 0.702287 -0.0990541 0.700674" mass="0.290848" diaginertia="0.000241946 0.000222224 0.000100384"/>
+          <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link3"/>
+          <joint name="fl_joint3" pos="0 0 0" axis="0 0 1" limited="true" range="-2.697 0"/>
+          <body name="fl_link4" pos="-0.24221 0.068514 0" euler="-1.57079632679 -1.3826 0">
+            <inertial pos="0.000276465 -0.00102804 -0.00472831" quat="0.492305 0.505285 0.503294 0.499017" mass="0.127087" diaginertia="4.87057e-05 4.10595e-05 3.82001e-05"/>
+            <geom type="mesh"  density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link4"/>
+            <joint name="fl_joint4" pos="0 0 0" axis="0 0 1" limited="true" range="-1.832 1.832"/>
+            <body name="fl_link5" pos="0 0 0" euler="1.57079632679 0 0">
+              <inertial pos="8.82262e-05 0.0566829 -0.0019612" quat="0.507447 0.490986 0.506887 0.494466" mass="0.144711" diaginertia="5.63237e-05 4.88652e-05 4.39642e-05"/>
+              <geom type="mesh"  density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link5"/>
+              <joint name="fl_joint5" pos="0 0 0" axis="0 0 1" limited="true" range="-1.22 1.22"/>
+              <body name="fl_link6" pos="0 0.091 0.0014165" quat="1.89468e-08 -1.89469e-08 -0.707105 -0.707108">
+                <geom type="mesh" pos="-0.04181 0 0.07402" euler="0 0.349 1.57" density="2.83" rgba="0.898039 0.917647 0.929412 1" mesh="dabai"/>
+                <camera name="fl_dabai" pos="-0.03391 0 0.07134" euler="0 -2.791 -1.57" fovy="55" />
+                <inertial pos="0.0010312 0.0121761 0.0315481" quat="0.0230402 0.707091 0.0373344 0.70576" mass="0.195187" diaginertia="0.000154294 0.000125965 6.43536e-05"/>
+                <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link6"/>
+                <joint name="fl_joint6" pos="0 0 0" axis="0 0 1" limited="true" range="-3.14 3.14"/>
+                <site name="left_pinch" pos="0 0 0.145"/>
+                <body name="fl_link7" pos="-0.0001 0 0.13502999999999979" euler="1.57079632679 3.1415926 0">
+                  <inertial pos="-0.000277778 -0.0467673 -0.00921029" quat="0.46134 0.536174 -0.553273 0.439968" mass="0.0264823" diaginertia="1.45134e-05 1.00041e-05 5.87021e-06"/>
+                  <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link7"/>
+                  <joint name="fl_joint7" type="slide" pos="0 0 0" axis="0 0 -1" limited="true" range="0 0.04"/>
+                </body>
+                <body name="fl_link8" pos="0.0001 0 0.13502999999999979" euler="-1.57079632679 3.1415926 0 ">
+                  <inertial pos="0.000277817 0.0467674 -0.0092103" quat="0.553273 0.439968 -0.46134 0.536174" mass="0.0264822" diaginertia="1.45133e-05 1.0004e-05 5.87021e-06"/>
+                  <geom type="mesh" density="2.83" rgba="0.752941 0.752941 0.752941 1" mesh="link8"/>
+                  <joint name="fl_joint8" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.04 0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <body name="target" pos=".15 0 .5" quat="0 1 0 0" mocap="true">
+      <geom name="target" type="box" size=".03 .03 .03" contype="0" conaffinity="0" rgba=".6 .3 .3 1"/>
+    </body>
+  </worldbody>
+
+<actuator>
+    <position name="fl_joint1" ctrllimited="true" ctrlrange="-2.618 2.618" joint="fl_joint1" kp="10000"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint2" ctrllimited="true" ctrlrange="0 3.14" joint="fl_joint2" kp="2000"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint3" ctrllimited="true" ctrlrange="-2.697 0" joint="fl_joint3" kp="500"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint4" ctrllimited="true" ctrlrange="-1.832 1.832" joint="fl_joint4" kp="50"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint5" ctrllimited="true" ctrlrange="-1.22 1.22" joint="fl_joint5" kp="20"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint6" ctrllimited="true" ctrlrange="-3.14158 3.14158" joint="fl_joint6" kp="5"  user="1" forcelimited="true" forcerange="-100 100"/>
+    <position name="fl_joint7" ctrllimited="true" ctrlrange="0 0.04" joint="fl_joint7" kp="10000"  user="1" forcelimited="true" forcerange="-10 10"/>
+    <position name="fl_joint8" ctrllimited="true" ctrlrange="-0.04 0" joint="fl_joint8" kp="10000"  user="1" forcelimited="true" forcerange="-10 10"/>
+</actuator>
+
+-<sensor>
+-  <framepos name="left_pinch_pos" objtype="site" objname="left_pinch"/>
+-  <framequat name="left_pinch_quat" objtype="site" objname="left_pinch"/>
+-  <framelinvel name="left_pinch_vel" objtype="site" objname="left_pinch"/>
+-  <framepos name="block_pos" objtype="geom" objname="block"/>
+-  <framequat name="block_quat" objtype="geom" objname="block"/>
+-</sensor>
+
+</mujoco>
