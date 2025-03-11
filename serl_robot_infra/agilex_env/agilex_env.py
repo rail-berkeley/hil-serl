@@ -15,10 +15,6 @@ from collections import OrderedDict
 from typing import Dict
 from functools import partial
 from cv_bridge import CvBridge
-from trac_ik_python.trac_ik import IK
-from ikpy.chain import Chain
-from scipy.spatial.transform import Rotation as R
-from ik_solver import Arm_IK
 
 import rospy
 from geometry_msgs.msg import Pose
@@ -458,50 +454,16 @@ class AgilexEnv(gym.Env):
         """Internal function to send position command to the robot."""
         if not self.control_arm:
             return
-        arr = np.array(pos).astype(np.float32)
-        joint_angle = self.compute_ik(pos)
-        print(f"arm {self.config.ARM} send pose command {arr}, joint_angle: {joint_angle}")
-        if joint_angle is not None:
-            self.send_joint_command(joint_angle)
-        else:
-            print("\033[31mIk Failed\033[0m")
-        #pose = Pose()
-        #pose.position.x, pose.position.y, pose.position.z = arr[:3]
-        #(
-        #    pose.orientation.x,
-        #    pose.orientation.y,
-        #    pose.orientation.z,
-        #    pose.orientation.w,
-        #) = arr[3:]
-        #self.end_pose_pub.publish(pose)
-
-    def compute_ik(self, pos):
-        # 机器人 URDF 里的链定义
-        try:
-            # 目标末端位姿
-            assert len(pos) == 7 
-            #qinit = [0.0] * 6
-            #joint_angles = self.ik_solver.get_ik(self.curr_joint, *pos, 0.01, 0.01, 0.01, 0.1, 0.1, 0.1)
-            joint_angles = self.pinco_ik_solver.get_ik_solution(pos)
-            return joint_angles
-        except:
-            print("solve failed")
-            return [0.0]*6
-
-        #robot_chain = Chain.from_urdf_file("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_no_gripper_description.urdf")
-        ##reachable = robot_chain.is_reachable(pos[:3])
-        ##if not reachable:
-        ##        print("目标点不可达，请调整目标位置！")
-        ##sub_chain = robot_chain.links[:7]
-        #rot_matrix = R.from_quat(pos[3:]).as_matrix()
-        #target_transform = np.eye(4)
-        #target_transform[:3, :3] = rot_matrix  # 旋转部分
-        #target_transform[:3, 3] = np.array(pos[:3]) # 平移部分
-        #print(self.curr_joint)
-        #initial_joint = [0.0] + self.curr_joint
-        #joint_angles = robot_chain.inverse_kinematics_frame(target_transform, initial_position=initial_joint, max_iter=1000)
-        #print(f"iky joint_angles, {joint_angles}")
-        #return joint_angles[1:]
+        #print(f"arm {self.config.ARM} send pose command {arr}")
+        pose = Pose()
+        pose.position.x, pose.position.y, pose.position.z = pos[:3]
+        (
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        ) = pos[3:]
+        self.end_pose_pub.publish(pose)
 
     def send_joint_command(self, joint: np.ndarray):
         joint_state_msg = JointState()
