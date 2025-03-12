@@ -165,7 +165,6 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 actions = env.action_space.sample()
             else:
                 sampling_rng, key = jax.random.split(sampling_rng)
-                print("before sample action")
                 actions = agent.sample_actions(
                     observations=jax.device_put(obs),
                     seed=key,
@@ -175,7 +174,6 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
         # Step environment
         with timer.context("step_env"):
-            print(f"sample action {actions}")
             next_obs, reward, done, truncated, info = env.step(actions)
             if "left" in info:
                 info.pop("left")

@@ -290,16 +290,18 @@ class AgilexEnv(gym.Env):
         """standard gym step function."""
         start_time = time.time()
         action = np.clip(action, self.action_space.low, self.action_space.high)
-        xyz_delta = action[:3]
 
         self.nextpos = self.curr_end_pos.copy()
-        self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
+        self.nextpos[:3] = actioin[:3]
+        self.nextpos[3:] = euler_2_quat(action[3:6])
+        #xyz_delta = action[:3]
+        #self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
 
-        # GET ORIENTATION FROM ACTION
-        self.nextpos[3:] = (
-            Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
-            * Rotation.from_quat(self.curr_end_pos[3:])
-        ).as_quat()
+        ## GET ORIENTATION FROM ACTION
+        #self.nextpos[3:] = (
+        #    Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
+        #    * Rotation.from_quat(self.curr_end_pos[3:])
+        #).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
         if self.control_arm:
@@ -367,7 +369,8 @@ class AgilexEnv(gym.Env):
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
-            #requests.post(self.url + "jointreset")
+            JOINT_RESET = [-0.0013, 0.0021, 0.0158, -0.0326, -0.00286, 0.00095]
+            self.send_joint_command(JOINT_RESET)
             time.sleep(0.5)
 
         # Perform Carteasian reset
@@ -389,7 +392,7 @@ class AgilexEnv(gym.Env):
         # Change to compliance mode
         #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
 
-    def reset(self, joint_reset=False, **kwargs):
+    def reset(self, joint_reset=True, **kwargs):
         self.last_gripper_act = time.time()
         # TODO: update param
         #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)

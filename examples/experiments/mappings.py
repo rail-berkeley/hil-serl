@@ -9,7 +9,7 @@ from experiments.object_handover_sim.config import (
 # from experiments.object_handover_agilex.config import (
 #    TrainConfig as ObjectHandoverAgilexTrainConfig,
 # )
-# from experiments.grab_bottole.config import TrainConfig as GrabBottoleAgilexTrainConfig
+from experiments.grab_bottole.config import TrainConfig as GrabBottoleAgilexTrainConfig
 from experiments.grab_bottole_sim.config import TrainConfig as GrabBottoleSimTrainConfig
 
 CONFIG_MAPPING = {
@@ -19,6 +19,6 @@ CONFIG_MAPPING = {
     # "egg_flip": EggFlipTrainConfig,
     "object_handover_sim": ObjectHandoverSimTrainConfig,
     # "object_handover_agilex": ObjectHandoverAgilexTrainConfig,
-    # "grab_bottole": GrabBottoleAgilexTrainConfig,
+    "grab_bottole": GrabBottoleAgilexTrainConfig,
     "grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

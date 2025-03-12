@@ -24,8 +24,9 @@ class RightEnvConfig(DefaultEnvConfig):
         "front": "/camera_f/color/image_raw",
     }
     RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
-    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.20, -0.5, 0.0, -1.04])
-    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.5, 0.9, 1.57])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.20, -0.17, 1.23, -1.04])
+    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.17, 2.09, 1.04])
+
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
     DISPLAY_IMAGE = False
@@ -100,7 +101,8 @@ class TrainConfig(DefaultTrainingConfig):
         # env = DualRelativeFrame(env)
 
         # env = DualQuat2EulerWrapper(env)
-        env = ExpertIntervWrapper(env)
+        if not fake_env:
+            env = ExpertIntervWrapper(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
 

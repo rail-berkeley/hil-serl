@@ -4,6 +4,11 @@ import time
 from typing import OrderedDict
 from collections import deque
 from colorama import Fore, Style
+import rospy
+from geometry_msgs.msg import Pose
+from sensor_msgs.msg import JointState, Image
+from std_msgs.msg import Float64
+from std_msgs.msg import Header
 
 from tf.transformations import quaternion_from_euler  # 用于欧拉角到四元数的转换
 from tf.transformations import euler_from_quaternion  # 用于欧拉角到四元数的转换
@@ -342,8 +347,7 @@ class DualExpertIntervWrapper(gym.ActionWrapper):
         Output:
         - action: spacemouse action if nonezero; else, policy action
         """
-        AgilexMasterControlMode = True
-        if AgilexMasterControlMode:
+        if self.AgilexMasterControlMode:
             left_action = self.env_left.curr_end_pos
             euler = euler_from_quaternion(action[3:])
             left_action[3:6] = euler
@@ -368,7 +372,10 @@ class DualExpertIntervWrapper(gym.ActionWrapper):
         info["right"] = self.right
         return obs, rew, done, truncated, info
 
+
 from pynput import keyboard
+
+
 class ExpertIntervWrapper(gym.ActionWrapper):
     def __init__(self, env, action_indices=None):
         super().__init__(env)
@@ -387,32 +394,58 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         self.expert_gripper_deque = deque()
 
         self.expert_pos_sub = rospy.Subscriber(
-            "/left/end_pose_quat", Pose, self.update_expert_pos, queue_size=100, tcp_nodelay=True
+            "/left/end_pose_quat",
+            Pose,
+            self.update_expert_pos,
+            queue_size=100,
+            tcp_nodelay=True,
         )
         self.expert_gripper_sub = rospy.Subscriber(
-            "/left/gripper_angle", Float32, self.update_expert_gripper, queue_size=100, tcp_nodelay=True
+            "/left/gripper_angle",
+            Float64,
+            self.update_expert_gripper,
+            queue_size=100,
+            tcp_nodelay=True,
         )
         self.AgilexMasterControlMode = False
-        def on_press(key):
-            try:
-                if key == Keyboard.Key.space:
-                    if self.AgilexMasterControlMode:
-                        print(Fore.RED + "Exit interve mode" + Style.RESET_ALL)
-                        self.AgilexMasterControlMode = False
-                        self.expert_gripper_deque.clear()
-                        self.expert_pos_deque.clear()
-                    else:
-                        print(Fore.GREEN+ "Enter interve mode" + Style.RESET_ALL)
-                        self.AgilexMasterControlMode = True
-            except AttributeError:
-                print(f"特殊按键: {key}")
-        with keyboard.Listener(on_press=on_press) as listener:
+        self.has_align_expert = False
+        self.listener_thread = threading.Thread(
+            target=self.start_keyboard_listener, daemon=True
+        )
+        self.listener_thread.start()
+
+    def on_press(self, key):
+        try:
+            if key == keyboard.Key.space:
+                if self.AgilexMasterControlMode:
+                    print(Fore.RED + "Exit interve mode" + Style.RESET_ALL)
+                    self.AgilexMasterControlMode = False
+                    self.has_align_expert = False
+                    self.expert_gripper_deque.clear()
+                    self.expert_pos_deque.clear()
+                else:
+                    print(Fore.GREEN + "Enter interve mode" + Style.RESET_ALL)
+                    self.AgilexMasterControlMode = True
+        except AttributeError:
+            print(f"特殊按键: {key}")
+
+    def start_keyboard_listener(self):
+        with keyboard.Listener(on_press=self.on_press) as listener:
             listener.join()
 
     def update_expert_pos(self, msg):
         if len(self.expert_pos_deque) >= 100:
             self.expert_pos_deque.popleft()
-        self.expert_pos_deque.append(msg)
+        pose = [
+            msg.position.x,
+            msg.position.y,
+            msg.position.z,
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z,
+            msg.orientation.w,
+        ]
+        self.expert_pos_deque.append(pose)
 
     def update_expert_gripper(self, msg):
         if len(self.expert_gripper_deque):
@@ -431,22 +464,34 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             wait_start = time.time()
             while True:
                 action_arm_pos = self.env.curr_end_pos
+                if len(self.expert_pos_deque) == 0:
+                    return action, False
                 expert_arm_pos = self.expert_pos_deque[-1]
-                if not self.is_pos_close(action_arm_pos, expert_arm_pos):
+                print(f"wraper action {action_arm_pos}")
+                print(f"wraper expert {expert_arm_pos}")
+                if not self.has_align_expert and not self.is_pos_close(
+                    action_arm_pos, expert_arm_pos
+                ):
                     time.sleep(0.5)
                 else:
+                    self.has_align_expert = True
                     break
-                if  time.time() - wait_start > 20.0:
+                if time.time() - wait_start > 20.0:
                     return action, False
 
             euler = euler_from_quaternion(expert_arm_pos[3:])
+            expert_action = expert_arm_pos
             expert_action[3:6] = euler
-            expert_action[6] = self.expert_gripper_deque[-1]
+            expert_action[6] = (
+                self.expert_gripper_deque[-1]
+                if len(self.expert_gripper_deque) > 0
+                else action[6]
+            )
             return expert_action, True
         else:
             return action, False
 
-    def is_pos_close(q1, q2):
+    def is_pos_close(self, q1, q2):
         """
         计算两个四元数之间的旋转角度误差（弧度）。
         q1, q2: [qx, qy, qz, qw] 形式的四元数
@@ -456,7 +501,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         dot_product = np.dot(quat_1, quat_2)  # 计算四元数点积
         dot_product = np.clip(dot_product, -1.0, 1.0)  # 避免浮点误差导致 acos 出错
         rot_error = 2 * np.arccos(abs(dot_product))  # 计算旋转角度（弧度）
-        
+
         """
         判断两个位姿是否接近
         pose1, pose2: [x, y, z, qx, qy, qz, qw] 形式的位姿数据
@@ -466,18 +511,19 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         # 计算位置误差
         pos1, pos2 = np.array(q1[:3]), np.array(q2[:3])
         pos_error = np.linalg.norm(pos1 - pos2)
-        
+        print(f"pos error { pos_error}, rot error {rot_error}")
         # 判断是否接近
-        is_close = pos_error < 0.1 and rot_error < 0.1 
+        is_close = pos_error < 0.2 and rot_error < 0.3
         return is_close
 
     def step(self, action):
         self.env.control_arm = True
         new_action, replaced = self.action(action)
         if replaced:
-            #self.env.control_arm = False
+            # self.env.control_arm = False
             print(f"get interve action {new_action}")
         obs, rew, done, truncated, info = self.env.step(new_action)
         if replaced:
             info["intervene_action"] = new_action
+        print(f"has_interved {replaced}")
         return obs, rew, done, truncated, info
