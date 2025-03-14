@@ -21,7 +21,7 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState, Image
 from std_msgs.msg import Float64
 from std_msgs.msg import Header
-
+from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
 
@@ -118,9 +118,6 @@ class AgilexEnv(gym.Env):
         if not fake_env:
             self.control_arm = True
             self.init_pub_sub_node()
-            self.ik_solver = IK("base_link", "link6", urdf_string=open("/home/agilex/ChaseWang/ws/Piper_ros/src/piper_description/urdf/piper_description.urdf", 'r').read())
-            self.pinco_ik_solver = Arm_IK(urdf_path="")
-        # convert last 3 elements from euler to quat, from size (6,) to (7,)
         self.resetpos = np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
         )
@@ -264,25 +261,27 @@ class AgilexEnv(gym.Env):
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
+        print(Fore.RED + f" {self.xyz_bounding_box.low} " + Fore.BLUE + f" {pose[:3]} " + Fore.RED + f" {self.xyz_bounding_box.high}" + Style.RESET_ALL)
         pose[:3] = np.clip(
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
-        euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
 
+        print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
+        euler = Rotation.from_quat(pose[3:]).as_euler("zxy")
         # Clip first euler angle separately due to discontinuity from pi to -pi
         sign = np.sign(euler[0])
         euler[0] = sign * (
             np.clip(
                 np.abs(euler[0]),
-                self.rpy_bounding_box.low[0],
-                self.rpy_bounding_box.high[0],
+                self.rpy_bounding_box.low[2],
+                self.rpy_bounding_box.high[2],
             )
         )
 
         euler[1:] = np.clip(
-            euler[1:], self.rpy_bounding_box.low[1:], self.rpy_bounding_box.high[1:]
+            euler[1:], self.rpy_bounding_box.low[:1], self.rpy_bounding_box.high[:1]
         )
-        pose[3:] = Rotation.from_euler("xyz", euler).as_quat()
+        pose[3:] = Rotation.from_euler("zxy", euler).as_quat()
 
         return pose
 
@@ -292,18 +291,20 @@ class AgilexEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.curr_end_pos.copy()
-        self.nextpos[:3] = actioin[:3]
-        self.nextpos[3:] = euler_2_quat(action[3:6])
-        #xyz_delta = action[:3]
-        #self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
++       print(f"current pos in step: {self.nextpos}")
+        #self.nextpos[:3] = actioin[:3]
+        #self.nextpos[3:] = euler_2_quat(action[3:6])
 
++       xyz_delta = action[:3]
++       self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
         ## GET ORIENTATION FROM ACTION
-        #self.nextpos[3:] = (
-        #    Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
-        #    * Rotation.from_quat(self.curr_end_pos[3:])
-        #).as_quat()
+        self.nextpos[3:] = (
+            Rotation.from_euler("zxy", action[3:6] * self.action_scale[1])
+            * Rotation.from_quat(self.curr_end_pos[3:])
+        ).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
+        print(f"pos before clip: {self.nextpos}")
         if self.control_arm:
             self._send_gripper_command(gripper_action)
             cliped_pos = self.clip_safety_box(self.nextpos)
@@ -360,18 +361,13 @@ class AgilexEnv(gym.Env):
         implemented each subclass for the specific task.
         Should override this method if custom reset procedure is needed.
         """
-        # Change to precision mode for reset        # Use compliance mode for coupled reset
-        self._send_pos_command(self.curr_end_pos)
-        time.sleep(0.3)
-        #requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
-        time.sleep(0.5)
-
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
-            JOINT_RESET = [-0.0013, 0.0021, 0.0158, -0.0326, -0.00286, 0.00095]
+            JOINT_RESET = [-0.0013, 0.0021, -0.0158, -0.0326, -0.00286, 0.00095]
             self.send_joint_command(JOINT_RESET)
             time.sleep(0.5)
+            return
 
         # Perform Carteasian reset
         if self.randomreset:  # randomize reset position in xy plane

@@ -463,7 +463,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             # Wait for expert arm align to action arm
             wait_start = time.time()
             while True:
-                action_arm_pos = self.env.curr_end_pos
+                action_arm_pos = np.array(self.env.curr_end_pos)
                 if len(self.expert_pos_deque) == 0:
                     return action, False
                 expert_arm_pos = self.expert_pos_deque[-1]
@@ -476,11 +476,14 @@ class ExpertIntervWrapper(gym.ActionWrapper):
                 else:
                     self.has_align_expert = True
                     break
-                if time.time() - wait_start > 20.0:
+                if not self.AgilexMasterControlMode or time.time() - wait_start > 20.0:
                     return action, False
-
-            euler = euler_from_quaternion(expert_arm_pos[3:])
+            rot_expert = R.from_quat(expert_arm_pos[3:])
+            rot_curr = R.from_quat(action_arm_pos[3:])
+            euler = (rot_expert*rot_curr.inv()).as_euler('zxy')
+            euler = euler/self.env.action_scale[1]
             expert_action = expert_arm_pos
+            expert_action[:3] = (expert_action[:3] - action_arm_pos[:3])/self.env.action_scale[0]
             expert_action[3:6] = euler
             expert_action[6] = (
                 self.expert_gripper_deque[-1]
