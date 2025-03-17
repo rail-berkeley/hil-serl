@@ -6,6 +6,7 @@ from socket import gethostname
 import absl.flags as flags
 import ml_collections
 import wandb
+import os
 
 
 def _recursive_flatten_dict(d: dict):
@@ -55,7 +56,9 @@ class WandBLogger(object):
         print(self.config)
 
         if wandb_output_dir is None:
-            wandb_output_dir = tempfile.mkdtemp()
+            #wandb_output_dir = tempfile.mkdtemp()
+            wandb_output_dir = os.path.join(os.getcwd(), "wandb")
+            print(f"wandb dir: {wandb_output_dir}")
 
         self._variant = copy(variant)
 
@@ -65,7 +68,7 @@ class WandBLogger(object):
         if debug:
             mode = "disabled"
         else:
-            mode = "online"
+            mode = "offline"
 
         self.run = wandb.init(
             config=self._variant,

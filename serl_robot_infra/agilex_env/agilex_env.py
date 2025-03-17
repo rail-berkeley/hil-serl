@@ -266,8 +266,8 @@ class AgilexEnv(gym.Env):
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
-        print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
         euler = Rotation.from_quat(pose[3:]).as_euler("zxy")
+        print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
         # Clip first euler angle separately due to discontinuity from pi to -pi
         sign = np.sign(euler[0])
         euler[0] = sign * (
@@ -279,8 +279,9 @@ class AgilexEnv(gym.Env):
         )
 
         euler[1:] = np.clip(
-            euler[1:], self.rpy_bounding_box.low[:1], self.rpy_bounding_box.high[:1]
+            euler[1:], self.rpy_bounding_box.low[:2], self.rpy_bounding_box.high[:2]
         )
+        print(f"cliped euler: {euler}")
         pose[3:] = Rotation.from_euler("zxy", euler).as_quat()
 
         return pose
@@ -291,12 +292,12 @@ class AgilexEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.curr_end_pos.copy()
-+       print(f"current pos in step: {self.nextpos}")
+        print(f"current pos in step: {self.nextpos}")
         #self.nextpos[:3] = actioin[:3]
         #self.nextpos[3:] = euler_2_quat(action[3:6])
 
-+       xyz_delta = action[:3]
-+       self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
+        xyz_delta = action[:3]
+        self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
         ## GET ORIENTATION FROM ACTION
         self.nextpos[3:] = (
             Rotation.from_euler("zxy", action[3:6] * self.action_scale[1])
@@ -366,6 +367,7 @@ class AgilexEnv(gym.Env):
             print("JOINT RESET")
             JOINT_RESET = [-0.0013, 0.0021, -0.0158, -0.0326, -0.00286, 0.00095]
             self.send_joint_command(JOINT_RESET)
+            self._send_gripper_command(7.5)
             time.sleep(0.5)
             return
 

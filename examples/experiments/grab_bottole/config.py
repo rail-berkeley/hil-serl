@@ -24,8 +24,8 @@ class RightEnvConfig(DefaultEnvConfig):
         "front": "/camera_f/color/image_raw",
     }
     RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
-    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.20, -0.17, 1.23, -1.04])
-    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.17, 2.09, 1.04])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.15, -1.04, 1.43, -0.24])
+    ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.04, 1.89, 0.24])
 
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
@@ -84,7 +84,7 @@ class TrainConfig(DefaultTrainingConfig):
         "gripper_pose",
     ]
     buffer_period = 1000
-    checkpoint_period = 5000
+    checkpoint_period = 1000
     steps_per_update = 50
     encoder_type = "resnet-pretrained"
     setup_mode = "single-arm-learned-gripper"

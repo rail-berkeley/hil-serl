@@ -60,6 +60,19 @@ sharding = jax.sharding.PositionalSharding(devices)
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
 
+def has_checkpoint_folder(directory):
+    if not os.path.exists(directory):
+        return False
+    # 获取目录下的所有文件和文件夹
+    items = os.listdir(directory)
+    
+    # 遍历所有项，检查是否存在以 "checkpoint_" 开头的文件夹
+    for item in items:
+        item_path = os.path.join(directory, item)
+        if os.path.isdir(item_path) and item.startswith("checkpoint_"):
+            return True
+    return False
+
 
 ##############################################################################
 
@@ -116,7 +129,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             )[12:-4]
         )
         + 1
-        if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
+        if FLAGS.checkpoint_path and has_checkpoint_folder(FLAGS.checkpoint_path)
         else 0
     )
     print(f"start step {start_step}")
@@ -266,7 +279,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             )[11:]
         )
         + 1
-        if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
+        if FLAGS.checkpoint_path and has_checkpoint_folder(FLAGS.checkpoint_path)
         else 0
     )
     step = start_step
@@ -446,7 +459,7 @@ def main(_):
     # need the jnp.array to avoid a bug where device_put doesn't recognize primitives
     agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
 
-    if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
+    if FLAGS.checkpoint_path is not None and has_checkpoint_folder(FLAGS.checkpoint_path):
         input("Checkpoint path already exists. Press Enter to resume training.")
         ckpt = checkpoints.restore_checkpoint(
             os.path.abspath(FLAGS.checkpoint_path),
