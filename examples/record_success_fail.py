@@ -17,13 +17,18 @@ flags.DEFINE_integer(
 
 
 success_key = False
+failed_key = False
 
 
 def on_press(key):
     global success_key
     try:
-        if str(key) == "Key.space":
+        if key.char == 's':
             success_key = True
+            failed_key = False
+        if key.char == 'f'
+            success_key = False
+            failed_key = True
     except AttributeError:
         pass
 
@@ -66,7 +71,7 @@ def main(_):
             successes.append(transition)
             pbar.update(1)
             success_key = False
-        else:
+        elif failed_key:
             failures.append(transition)
 
         if done or truncated:
