@@ -30,7 +30,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
-    DISPLAY_IMAGE = False
+    DISPLAY_IMAGE = True
     MAX_EPISODE_LENGTH = 200
 
     GRIPPER_SLEEP = 1.0

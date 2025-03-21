@@ -181,7 +181,7 @@ class AgilexEnv(gym.Env):
 
         if self.display_image:
             self.img_queue = queue.Queue()
-            self.displayer = ImageDisplayer(self.img_queue, self.url)
+            self.displayer = ImageDisplayer(self.img_queue, "visualizer")
             self.displayer.start()
 
         # if not fake_env:
@@ -255,6 +255,10 @@ class AgilexEnv(gym.Env):
         cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
         # print(f"image shape {key} {cv_image.shape}")
         self.wrist_img[key] = cv_image
+        display_image = {}
+        if self.display_image and key != "side":
+            display_image[key] = cv_image
+            self.img_queue.put(display_images)
         # if key not in self.wrist_img:
         #    self.wrist_img[key] = [cv_image]
         # else:
