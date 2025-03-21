@@ -231,7 +231,7 @@ class AgilexEnv(gym.Env):
 
     def update_curr_joint(self, joint_state):
         self.curr_joint = list(joint_state.position)
-        #print(f"joint state: {self.curr_joint}")
+        # print(f"joint state: {self.curr_joint}")
 
     def update_curr_end_pos(self, pose_rot):
         end_pose = []
@@ -243,31 +243,48 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.z)
         end_pose.append(pose_rot.orientation.w)
         self.curr_end_pos = np.array(end_pose)
-        #joint_angle = self.compute_ik(end_pose)
-        #print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
+        # joint_angle = self.compute_ik(end_pose)
+        # print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
 
     def update_gripper_state(self, gripper_state):
-        #print(f"get gripper val {gripper_state}")
-        self.curr_gripper_pos = [gripper_state.data]
+        # print(f"get gripper val {gripper_state}")
+        factor = 13.3
+        self.curr_gripper_pos = [np.clip(gripper_state.data * factor, 0.0, 1.0)]
 
     def img_callback(self, image, key):
-        cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding='bgr8')
-        #print(f"image shape {key} {cv_image.shape}")
+        cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
+        # print(f"image shape {key} {cv_image.shape}")
         self.wrist_img[key] = cv_image
-        #if key not in self.wrist_img:
+        # if key not in self.wrist_img:
         #    self.wrist_img[key] = [cv_image]
-        #else:
+        # else:
         #    self.wrist_img[key].append(cv_image)
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
-        #print(Fore.RED + f" {self.xyz_bounding_box.low} " + Fore.BLUE + f" {pose[:3]} " + Fore.RED + f" {self.xyz_bounding_box.high}" + Style.RESET_ALL)
+        # print(
+        #    Fore.RED
+        #    + f" {self.xyz_bounding_box.low} "
+        #    + Fore.BLUE
+        #    + f" {pose[:3]} "
+        #    + Fore.RED
+        #    + f" {self.xyz_bounding_box.high}"
+        #    + Style.RESET_ALL
+        # )
         pose[:3] = np.clip(
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
         euler = Rotation.from_quat(pose[3:]).as_euler("zxy")
-        #print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
+        # print(
+        #    Fore.RED
+        #    + f" {self.rpy_bounding_box.low} "
+        #    + Fore.BLUE
+        #    + f" {euler} "
+        #    + Fore.RED
+        #    + f" {self.rpy_bounding_box.high}"
+        #    + Style.RESET_ALL
+        # )
         # Clip first euler angle separately due to discontinuity from pi to -pi
         sign = np.sign(euler[0])
         euler[0] = sign * (
@@ -281,7 +298,7 @@ class AgilexEnv(gym.Env):
         euler[1:] = np.clip(
             euler[1:], self.rpy_bounding_box.low[:2], self.rpy_bounding_box.high[:2]
         )
-        #print(f"cliped euler: {euler}")
+        # print(f"cliped euler: {euler}")
         pose[3:] = Rotation.from_euler("zxy", euler).as_quat()
 
         return pose
@@ -292,9 +309,9 @@ class AgilexEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.curr_end_pos.copy()
-        #print(f"current pos in step: {self.nextpos}")
-        #self.nextpos[:3] = actioin[:3]
-        #self.nextpos[3:] = euler_2_quat(action[3:6])
+        # print(f"current pos in step: {self.nextpos}")
+        # self.nextpos[:3] = actioin[:3]
+        # self.nextpos[3:] = euler_2_quat(action[3:6])
 
         xyz_delta = action[:3]
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
@@ -305,17 +322,17 @@ class AgilexEnv(gym.Env):
         ).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
-        #print(f"pos before clip: {self.nextpos}")
+        # print(f"pos before clip: {self.nextpos}")
         if self.control_arm:
             self._send_gripper_command(gripper_action)
             cliped_pos = self.clip_safety_box(self.nextpos)
-            #print(f"send step action: {cliped_pos}")
+            # print(f"send step action: {cliped_pos}")
             self._send_pos_command(cliped_pos)
 
         self.curr_path_length += 1
         dt = time.time() - start_time
         time.sleep(max(0, (1.0 / self.hz) - dt))
-        #print(f"actual pos: {self.curr_end_pos}")
+        # print(f"actual pos: {self.curr_end_pos}")
         self._update_curr_end_pos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)
@@ -367,7 +384,7 @@ class AgilexEnv(gym.Env):
             print("JOINT RESET")
             JOINT_RESET = [-0.0013, 0.0021, -0.0158, -0.0326, -0.00286, 0.00095]
             self.send_joint_command(JOINT_RESET)
-            self._send_gripper_command(7.5)
+            self._send_gripper_command(1)
             time.sleep(0.5)
             return
 
@@ -388,12 +405,12 @@ class AgilexEnv(gym.Env):
             self.interpolate_move(reset_pose, timeout=1)
 
         # Change to compliance mode
-        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
 
     def reset(self, joint_reset=True, **kwargs):
         self.last_gripper_act = time.time()
         # TODO: update param
-        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
         if self.save_video:
             self.save_video_recording()
 
@@ -455,7 +472,7 @@ class AgilexEnv(gym.Env):
         """Internal function to send position command to the robot."""
         if not self.control_arm:
             return
-        #print(f"arm {self.config.ARM} send pose command {arr}")
+        # print(f"arm {self.config.ARM} send pose command {arr}")
         pose = Pose()
         pose.position.x, pose.position.y, pose.position.z = pos[:3]
         (
@@ -470,14 +487,37 @@ class AgilexEnv(gym.Env):
         joint_state_msg = JointState()
         joint_state_msg.header = Header()
         joint_state_msg.header.stamp = rospy.Time.now()
-        joint_state_msg.name = ['joint0', 'joint1', 'joint2', 'joint3', 'joint4', 'joint5']
+        joint_state_msg.name = [
+            "joint0",
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5",
+        ]
         joint_state_msg.position = joint
         self.joint_pub.publish(joint_state_msg)
 
-    def _send_gripper_command(self, pos: float):
+    def _send_gripper_command(self, pos: float, mode="binary"):
         """Internal function to send gripper command to the robot."""
-        gripper_msg = pos
-        self.gripper_pub.publish(gripper_msg)
+        if mode == "binary":
+            if (
+                (pos <= -0.5)
+                and (self.curr_gripper_pos > 0.85)
+                and (time.time() - self.last_gripper_act > self.gripper_sleep)
+            ):  # close gripper
+                # specified for nong fu shan quan bottole
+                self.gripper_pub.publish(0.04)
+                self.last_gripper_act = time.time()
+            elif (
+                (pos >= 0.5)
+                and (self.curr_gripper_pos < 0.85)
+                and (time.time() - self.last_gripper_act > self.gripper_sleep)
+            ):  # open gripper
+                self.gripper_pub.publish(0.75)
+                self.last_gripper_act = time.time()
+            else:
+                return
 
     def _update_curr_end_pos(self):
         """
