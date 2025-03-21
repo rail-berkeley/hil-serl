@@ -22,9 +22,10 @@ class RightEnvConfig(DefaultEnvConfig):
     CAMERAS = {
         "wrist": "/camera_r/color/image_raw",
         "front": "/camera_f/color/image_raw",
+        "side": "/camera_s/color/image_raw",
     }
     RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
-    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.15, -1.04, 1.43, -0.24])
+    ABS_POSE_LIMIT_LOW = np.array([0.08, -0.31, 0.12, -1.04, 1.43, -0.24])
     ABS_POSE_LIMIT_HIGH = np.array([0.4, 0.11, 0.4, 0.04, 1.89, 0.24])
 
     RANDOM_RESET = False
@@ -76,8 +77,8 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["wrist", "front"]
-    classifier_keys = ["front"]
+    image_keys = ["wrist", "front", "side"]
+    classifier_keys = ["side"]
     proprio_keys = [
         "tcp_pose",
         "tcp_vel",

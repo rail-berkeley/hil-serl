@@ -75,7 +75,7 @@ def main(_):
         for trans in failure_data:
             if "images" in trans['observations'].keys():
                 continue
-            print(trans)
+            #print(trans)
             trans["labels"] = 0
             trans['actions'] = env.action_space.sample()
             neg_buffer.insert(trans)

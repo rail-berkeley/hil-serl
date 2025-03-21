@@ -22,20 +22,30 @@ failed_key = False
 
 def on_press(key):
     global success_key
+    global failed_key
     try:
         if key.char == 's':
             success_key = True
             failed_key = False
-        if key.char == 'f'
+        if key.char == 'f':
             success_key = False
             failed_key = True
+    except AttributeError:
+        pass
+
+def on_release(key):
+    global failed_key
+    try:
+        if key.char == 'f':
+            failed_key = False
     except AttributeError:
         pass
 
 
 def main(_):
     global success_key
-    listener = keyboard.Listener(on_press=on_press)
+    global failed_key
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
@@ -72,6 +82,7 @@ def main(_):
             pbar.update(1)
             success_key = False
         elif failed_key:
+            print("insert failed")
             failures.append(transition)
 
         if done or truncated:

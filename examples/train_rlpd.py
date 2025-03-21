@@ -355,8 +355,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
                 print_green(f"critic step buffer size {len(replay_buffer)}")
                 batch = next(replay_iterator)
                 print(f"batach size {len(batch)}")
-                # demo_batch = next(demo_iterator)
-                # batch = concat_batches(batch, demo_batch, axis=0)
+                demo_batch = next(demo_iterator)
+                batch = concat_batches(batch, demo_batch, axis=0)
 
             with timer.context("train_critics"):
                 agent, critics_info = agent.update(
@@ -368,8 +368,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             print_green(f"agent update buffer size {len(replay_buffer)}")
             batch = next(replay_iterator)
             print("get batch")
-            # demo_batch = next(demo_iterator)
-            # batch = concat_batches(batch, demo_batch, axis=0)
+            demo_batch = next(demo_iterator)
+            batch = concat_batches(batch, demo_batch, axis=0)
             print("before update")
             agent, update_info = agent.update(
                 batch,
@@ -441,7 +441,7 @@ def main(_):
             encoder_type=config.encoder_type,
             discount=config.discount,
         )
-        include_grasp_penalty = False
+        include_grasp_penalty = True
     elif config.setup_mode == "dual-arm-learned-gripper":
         agent: SACAgentHybridDualArm = make_sac_pixel_agent_hybrid_dual_arm(
             seed=FLAGS.seed,
@@ -485,7 +485,7 @@ def main(_):
             description=FLAGS.exp_name,
             debug=FLAGS.debug,
         )
-        return replay_buffer, None #wandb_logger
+        return replay_buffer, wandb_logger
 
     if FLAGS.learner:
         sampling_rng = jax.device_put(sampling_rng, device=sharding.replicate())

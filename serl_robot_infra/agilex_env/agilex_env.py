@@ -216,7 +216,7 @@ class AgilexEnv(gym.Env):
                 values,
                 Image,
                 partial(self.img_callback, key=key),
-                queue_size=1000,
+                queue_size=100,
                 tcp_nodelay=True,
             )
         self.end_pose_pub = rospy.Publisher(
@@ -261,13 +261,13 @@ class AgilexEnv(gym.Env):
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
-        print(Fore.RED + f" {self.xyz_bounding_box.low} " + Fore.BLUE + f" {pose[:3]} " + Fore.RED + f" {self.xyz_bounding_box.high}" + Style.RESET_ALL)
+        #print(Fore.RED + f" {self.xyz_bounding_box.low} " + Fore.BLUE + f" {pose[:3]} " + Fore.RED + f" {self.xyz_bounding_box.high}" + Style.RESET_ALL)
         pose[:3] = np.clip(
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
         euler = Rotation.from_quat(pose[3:]).as_euler("zxy")
-        print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
+        #print(Fore.RED + f" {self.rpy_bounding_box.low} " + Fore.BLUE + f" {euler} " + Fore.RED + f" {self.rpy_bounding_box.high}" + Style.RESET_ALL)
         # Clip first euler angle separately due to discontinuity from pi to -pi
         sign = np.sign(euler[0])
         euler[0] = sign * (
@@ -281,7 +281,7 @@ class AgilexEnv(gym.Env):
         euler[1:] = np.clip(
             euler[1:], self.rpy_bounding_box.low[:2], self.rpy_bounding_box.high[:2]
         )
-        print(f"cliped euler: {euler}")
+        #print(f"cliped euler: {euler}")
         pose[3:] = Rotation.from_euler("zxy", euler).as_quat()
 
         return pose
@@ -292,7 +292,7 @@ class AgilexEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.curr_end_pos.copy()
-        print(f"current pos in step: {self.nextpos}")
+        #print(f"current pos in step: {self.nextpos}")
         #self.nextpos[:3] = actioin[:3]
         #self.nextpos[3:] = euler_2_quat(action[3:6])
 
@@ -305,17 +305,17 @@ class AgilexEnv(gym.Env):
         ).as_quat()
 
         gripper_action = action[6] * self.action_scale[2]
-        print(f"pos before clip: {self.nextpos}")
+        #print(f"pos before clip: {self.nextpos}")
         if self.control_arm:
             self._send_gripper_command(gripper_action)
             cliped_pos = self.clip_safety_box(self.nextpos)
-            print(f"send step action: {cliped_pos}")
+            #print(f"send step action: {cliped_pos}")
             self._send_pos_command(cliped_pos)
 
         self.curr_path_length += 1
         dt = time.time() - start_time
         time.sleep(max(0, (1.0 / self.hz) - dt))
-        print(f"actual pos: {self.curr_end_pos}")
+        #print(f"actual pos: {self.curr_end_pos}")
         self._update_curr_end_pos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)
