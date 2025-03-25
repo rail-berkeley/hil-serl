@@ -15,6 +15,8 @@ from experiments.grab_bottole.wrapper import GripperPenaltyWrapper, ExpertInterv
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
 )
+from franka_env.envs.relative_env import RelativeFrame
+from franka_env.envs.wrappers import Quat2EulerWrapper
 
 
 class RightEnvConfig(DefaultEnvConfig):
@@ -94,16 +96,14 @@ class TrainConfig(DefaultTrainingConfig):
         env = AgilexEnv(
             hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
-        # if not fake_env:
-        #    env = DualSpacemouseIntervention(env, gripper_enabled=True)
-
-        # action is assumed to be (x, y, z, rx, ry, rz, gripper)
-        # Transform action from end-effector frame to base frame
-        # env = DualRelativeFrame(env)
-
-        # env = DualQuat2EulerWrapper(env)
         if not fake_env:
             env = ExpertIntervWrapper(env)
+        # action is assumed to be (x, y, z, rx, ry, rz, gripper)
+        # Transform action from end-effector frame to base frame
+        env = RelativeFrame(env)
+
+        env = Quat2EulerWrapper(env)
+
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
 
