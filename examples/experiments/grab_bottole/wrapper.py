@@ -159,7 +159,6 @@ class GripperPenaltyWrapper(gym.Wrapper):
             action = info["intervene_action"]
 
         info["grasp_penalty"] = 0.0
-
         if (action[6] < -0.5 and self.last_left_gripper_pos > 0.85) or (
             action[6] > 0.5 and self.last_left_gripper_pos < 0.85
         ):
@@ -355,7 +354,14 @@ class DualExpertIntervWrapper(gym.ActionWrapper):
             right_action = self.env_right.curr_end_pos
             euler = euler_from_quaternion(action[3:])
             right_action[3:6] = euler
-            right_action[6] = self.env_right.curr_gripper_pos
+            normalized_pos = self.env_right.curr_gripper_pos*13.3
+            if normalized_pos > 0.85:
+                right_action[6] = 1 
+            elif normalized_pos < 0.4:
+                right_action[6] = -1
+            else:
+                right_action[6] = 0
+            print(right_action[6], " ", normalized_pos)
             action = np.concatenate(left_action, right_action)
             return action, True
 
@@ -426,12 +432,19 @@ class ExpertIntervWrapper(gym.ActionWrapper):
                 else:
                     print(Fore.GREEN + "Enter interve mode" + Style.RESET_ALL)
                     self.AgilexMasterControlMode = True
+            if key.char == 'd':
+                self.has_done = True
         except AttributeError:
             print(f"特殊按键: {key}")
 
     def start_keyboard_listener(self):
         with keyboard.Listener(on_press=self.on_press) as listener:
             listener.join()
+
+    def reset(self, **kwargs):
+        self.has_done = False
+        print("reset has done")
+        return self.env.reset(kwargs)
 
     def update_expert_pos(self, msg):
         if len(self.expert_pos_deque) >= 100:
@@ -485,11 +498,17 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             expert_action = expert_arm_pos
             expert_action[:3] = (expert_action[:3] - action_arm_pos[:3])/self.env.action_scale[0]
             expert_action[3:6] = euler
-            expert_action[6] = (
-                self.expert_gripper_deque[-1]
-                if len(self.expert_gripper_deque) > 0
-                else action[6]
-            )
+            if len(self.expert_gripper_deque) > 0:
+                normalized_pos = self.expert_gripper_deque[-1]*13.3
+                if normalized_pos > 0.85:
+                    expert_action[6] = 1 
+                elif normalized_pos < 0.4:
+                    expert_action[6] = -1
+                else:
+                    expert_action[6] = 0
+            else:
+                expert_action[6] = action[6]
+
             return expert_action, True
         else:
             return action, False
@@ -529,4 +548,5 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         if replaced:
             info["intervene_action"] = new_action
         print(f"has_interved {replaced}")
+        done = done or self.has_done
         return obs, rew, done, truncated, info

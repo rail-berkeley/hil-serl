@@ -7,3 +7,5 @@ python ../../train_rlpd.py "$@" \
     --checkpoint_path=first_run \
     --demo_path=... \
     --actor \
+#    --eval_checkpoint_step=8000 \
+#    --eval_n_trajs=10 \

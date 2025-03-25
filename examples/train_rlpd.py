@@ -113,6 +113,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                         print(dt)
 
                     success_counter += reward
+                    env.has_done = False
                     print(reward)
                     print(f"{success_counter}/{episode + 1}")
 

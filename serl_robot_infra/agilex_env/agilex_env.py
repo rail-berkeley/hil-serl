@@ -179,8 +179,8 @@ class AgilexEnv(gym.Env):
         if fake_env:
             return
 
+        self.img_queue = queue.Queue()
         if self.display_image:
-            self.img_queue = queue.Queue()
             self.displayer = ImageDisplayer(self.img_queue, "visualizer")
             self.displayer.start()
 
@@ -256,9 +256,9 @@ class AgilexEnv(gym.Env):
         # print(f"image shape {key} {cv_image.shape}")
         self.wrist_img[key] = cv_image
         display_image = {}
-        if self.display_image and key != "side":
+        if self.display_image and key == "side":
             display_image[key] = cv_image
-            self.img_queue.put(display_images)
+            self.img_queue.put(display_image)
         # if key not in self.wrist_img:
         #    self.wrist_img[key] = [cv_image]
         # else:
@@ -316,22 +316,24 @@ class AgilexEnv(gym.Env):
         # print(f"current pos in step: {self.nextpos}")
         # self.nextpos[:3] = actioin[:3]
         # self.nextpos[3:] = euler_2_quat(action[3:6])
+        try:
+            xyz_delta = action[:3]
+            self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
+            ## GET ORIENTATION FROM ACTION
+            self.nextpos[3:] = (
+                Rotation.from_euler("zxy", action[3:6] * self.action_scale[1])
+                * Rotation.from_quat(self.curr_end_pos[3:])
+            ).as_quat()
 
-        xyz_delta = action[:3]
-        self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
-        ## GET ORIENTATION FROM ACTION
-        self.nextpos[3:] = (
-            Rotation.from_euler("zxy", action[3:6] * self.action_scale[1])
-            * Rotation.from_quat(self.curr_end_pos[3:])
-        ).as_quat()
-
-        gripper_action = action[6] * self.action_scale[2]
-        # print(f"pos before clip: {self.nextpos}")
-        if self.control_arm:
-            self._send_gripper_command(gripper_action)
-            cliped_pos = self.clip_safety_box(self.nextpos)
-            # print(f"send step action: {cliped_pos}")
-            self._send_pos_command(cliped_pos)
+            gripper_action = action[6] * self.action_scale[2]
+            # print(f"pos before clip: {self.nextpos}")
+            if self.control_arm:
+                self._send_gripper_command(gripper_action)
+                cliped_pos = self.clip_safety_box(self.nextpos)
+                # print(f"send step action: {cliped_pos}")
+                self._send_pos_command(cliped_pos)
+        except:
+            print(f"calculate action error {action}")
 
         self.curr_path_length += 1
         dt = time.time() - start_time
@@ -507,7 +509,7 @@ class AgilexEnv(gym.Env):
         if mode == "binary":
             if (
                 (pos <= -0.5)
-                and (self.curr_gripper_pos > 0.85)
+                and (self.curr_gripper_pos[0] > 0.85)
                 and (time.time() - self.last_gripper_act > self.gripper_sleep)
             ):  # close gripper
                 # specified for nong fu shan quan bottole
@@ -515,8 +517,7 @@ class AgilexEnv(gym.Env):
                 self.last_gripper_act = time.time()
             elif (
                 (pos >= 0.5)
-                and (self.curr_gripper_pos < 0.85)
-                and (time.time() - self.last_gripper_act > self.gripper_sleep)
+                and (self.curr_gripper_pos[0] < 0.85)
             ):  # open gripper
                 self.gripper_pub.publish(0.75)
                 self.last_gripper_act = time.time()
