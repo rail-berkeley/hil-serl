@@ -57,15 +57,16 @@ def construct_adjoint_matrix_from_euler(tcp_pose):
     return adjoint_matrix
 
 
-def construct_homogeneous_matrix_from_euler(tcp_pose):
+def construct_homogeneous_matrix_from_euler(order="xyz", tcp_pose):
     """
     Construct the homogeneous transformation matrix from given pose.
     args: tcp_pose: (x, y, z, qx, qy, qz, qw)
     """
-    rotation = R.from_euler("xyz", tcp_pose[3:]).as_matrix()
+    rotation = R.from_euler(order, tcp_pose[3:6]).as_matrix()
     translation = np.array(tcp_pose[:3])
     T = np.zeros((4, 4))
     T[:3, :3] = rotation
     T[:3, 3] = translation
     T[3, 3] = 1
     return T
+
