@@ -320,8 +320,9 @@ class AgilexEnv(gym.Env):
             xyz_delta = action[:3]
             self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
             ## GET ORIENTATION FROM ACTION
+            euler_zxy = [action[5], action[3], action[4]]
             self.nextpos[3:] = (
-                Rotation.from_euler("zxy", action[3:6] * self.action_scale[1])
+                Rotation.from_euler("zxy", euler_zxy * self.action_scale[1])
                 * Rotation.from_quat(self.curr_end_pos[3:])
             ).as_quat()
 

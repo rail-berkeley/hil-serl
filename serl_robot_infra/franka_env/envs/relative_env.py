@@ -97,11 +97,8 @@ class RelativeFrame(gym.Wrapper):
         Transform action from body(end-effector) frame into into spatial(base) frame
         using the adjoint matrix.
         """
-        T_r_a = construct_homogeneous_matrix_from_euler("zxy", action)
-        T_r_b = np.linalg.inv(self.T_r_o_inv)
-        T_b_a = self.T_r_b @ T_r_a
-        action[0:3] = T_b_a[:3, 3]
-        action[3:6] = R.from_matrix(T_b_a[:3, :3]).as_euler("zxy")
+        action = np.array(action)
+        action[:6] = self.adjoint_matrix @ action[:6]
         return action
 
     def transform_action_inv(self, action: np.ndarray):
@@ -110,10 +107,7 @@ class RelativeFrame(gym.Wrapper):
         using the adjoint matrix.
         """
         action = np.array(action)
-        T_b_a = construct_homogeneous_matrix_from_euler("zxy", action)
-        T_r_a = self.T_r_o_inv @ T_r_a
-        action[0:3] = T_r_a[:3, 3]
-        action[3:6] = R.from_matrix(T_r_a[:3, :3]).as_euler("zxy")
+        action[:6] = np.linalg.inv(self.adjoint_matrix) @ action[:6]
         return action
 
 
