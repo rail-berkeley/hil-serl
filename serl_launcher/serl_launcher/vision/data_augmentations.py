@@ -107,7 +107,7 @@ def _random_gaussian_blur(
 def rgb_to_hsv(r, g, b):
     """Converts R, G, B  values to H, S, V values.
     Reference TF implementation:
-    https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/kernels/adjust_saturation_op.cc
+    https://github.com/tensorflow/tensorflow/blob/master//core/kernels/adjust_saturation_op.cc
     Only input values between 0 and 1 are guaranteed to work properly, but this
     function complies with the TF implementation outside of this range.
     Args:

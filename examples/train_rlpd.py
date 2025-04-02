@@ -150,6 +150,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     intervention_steps = 0
 
     pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
+    print(config.buffer_period)
     for step in pbar:
         timer.tick("total")
 
@@ -213,7 +214,10 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 intervention_steps = 0
                 already_intervened = False
                 client.update()
+                print("reset start")
                 obs, _ = env.reset()
+                time.sleep(5.0)
+                print("reset end")
 
         if step > 0 and config.buffer_period > 0 and step % config.buffer_period == 0:
             # dump to pickle file
@@ -229,6 +233,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             with open(
                 os.path.join(demo_buffer_path, f"transitions_{step}.pkl"), "wb"
             ) as f:
+                fp = os.path.join(demo_buffer_path, f"transitions_{step}.pkl")
+                print(f"Dumping to {fp} !!!")
                 pkl.dump(demo_transitions, f)
                 demo_transitions = []
 
@@ -504,8 +510,8 @@ def main(_):
 
     elif FLAGS.actor:
         sampling_rng = jax.device_put(sampling_rng, sharding.replicate())
-        data_store = QueuedDataStore(50000)  # the queue size on the actor
-        intvn_data_store = QueuedDataStore(50000)
+        data_store = QueuedDataStore(10000)  # the queue size on the actor
+        intvn_data_store = QueuedDataStore(10000)
 
         # actor loop
         print_green("starting actor loop")

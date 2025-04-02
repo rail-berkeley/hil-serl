@@ -9,7 +9,7 @@ import imageio
 import jax
 import jax.numpy as jnp
 import numpy as np
-import tensorflow as tf
+# import tensorflow as tf
 import wandb
 from flax.core import frozen_dict
 from flax.training import checkpoints
@@ -68,7 +68,7 @@ def concat_batches(offline_batch, online_batch, axis=1):
 def load_recorded_video(
     video_path: str,
 ):
-    with tf.io.gfile.GFile(video_path, "rb") as f:
+    with open(video_path, "rb") as f:
         video = np.array(imageio.mimread(f, "MP4")).transpose((0, 3, 1, 2))
         assert video.shape[1] == 3, "Numpy array should be (T, C, H, W)"
 

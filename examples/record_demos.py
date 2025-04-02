@@ -17,7 +17,14 @@ def main(_):
     assert FLAGS.exp_name in CONFIG_MAPPING, 'Experiment folder not found.'
     config = CONFIG_MAPPING[FLAGS.exp_name]()
     env = config.get_environment(fake_env=False, save_video=False, classifier=True)
-    
+    if not os.path.exists("./demo_data"):
+        os.makedirs("./demo_data")
+    uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"./demo_data/{FLAGS.exp_name}_{FLAGS.successes_needed}_demos_{uuid}.pkl"
+    def dump_data(transitions):    
+        with open(file_name, "wb") as f:
+            pkl.dump(transitions, f)
+            print(f"saved {success_needed} demos to {file_name}")
     obs, info = env.reset()
     print("Reset done")
     transitions = []
@@ -58,14 +65,11 @@ def main(_):
             trajectory = []
             returns = 0
             obs, info = env.reset()
-            
-    if not os.path.exists("./demo_data"):
-        os.makedirs("./demo_data")
-    uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"./demo_data/{FLAGS.exp_name}_{success_needed}_demos_{uuid}.pkl"
-    with open(file_name, "wb") as f:
-        pkl.dump(transitions, f)
-        print(f"saved {success_needed} demos to {file_name}")
+            dump_data(transitions)
+            print("reset start")
+            time.sleep(5.0)
+            print("reset end")
+            print("==")
 
 if __name__ == "__main__":
     app.run(main)
