@@ -51,6 +51,10 @@ def main(_):
                 continue
             trans["labels"] = 1
             trans['actions'] = env.action_space.sample()
+            trans['observations']['state'].resize((1,13)) # = trans['observations']['state'][:, :13]
+            trans['next_observations']['state'].resize((1,13))
+            #print(f"trans obs {trans['observations']}")
+            #print(trans)
             pos_buffer.insert(trans)
             
     pos_iterator = pos_buffer.get_iterator(
@@ -78,6 +82,8 @@ def main(_):
             #print(trans)
             trans["labels"] = 0
             trans['actions'] = env.action_space.sample()
+            trans['observations']['state'].resize((1, 13)) # = trans['observations']['state'][:13]
+            trans['next_observations']['state'].resize((1, 13))
             neg_buffer.insert(trans)
             
     neg_iterator = neg_buffer.get_iterator(

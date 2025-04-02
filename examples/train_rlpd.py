@@ -90,6 +90,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             agent.state,
             step=FLAGS.eval_checkpoint_step,
         )
+        print_green(f"Eval ckpt {FLAGS.eval_checkpoint_step}")
         agent = agent.replace(state=ckpt)
 
         for episode in range(FLAGS.eval_n_trajs):

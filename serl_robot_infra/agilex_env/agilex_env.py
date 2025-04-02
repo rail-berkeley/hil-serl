@@ -36,7 +36,8 @@ class ImageDisplayer(threading.Thread):
         while True:
             img_array = self.queue.get()  # retrieve an image from the queue
             if img_array is None:  # None is our signal to exit
-                break
+                time.sleep(0.01)
+                continue
 
             frame = np.concatenate(
                 [
@@ -46,7 +47,6 @@ class ImageDisplayer(threading.Thread):
                 ],
                 axis=1,
             )
-
             cv2.imshow(self.name, frame)
             cv2.waitKey(1)
 
@@ -115,9 +115,6 @@ class AgilexEnv(gym.Env):
         self.wrist_img = {}
         self.cv_bridge = CvBridge()
         self.control_arm = False
-        if not fake_env:
-            self.control_arm = True
-            self.init_pub_sub_node()
         self.resetpos = np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
         )
@@ -168,22 +165,23 @@ class AgilexEnv(gym.Env):
                 ),
                 "images": gym.spaces.Dict(
                     {
-                        key: gym.spaces.Box(0, 255, shape=(480, 640, 3), dtype=np.uint8)
+                        key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
                         for key in config.CAMERAS
                     }
                 ),
             }
         )
         self.cycle_count = 0
-
+        if not fake_env:
+            self.img_queue = queue.Queue(maxsize=1)
+            if self.display_image:
+                self.displayer = ImageDisplayer(self.img_queue, "visualizer")
+                self.displayer.start()
+            self.control_arm = True
+            self.init_pub_sub_node()
         if fake_env:
             return
-
-        self.img_queue = queue.Queue()
-        if self.display_image:
-            self.displayer = ImageDisplayer(self.img_queue, "visualizer")
-            self.displayer.start()
-
+        self.display_img_id = 0
         # if not fake_env:
         #    from pynput import keyboard
         #    self.terminate = False
@@ -216,7 +214,7 @@ class AgilexEnv(gym.Env):
                 values,
                 Image,
                 partial(self.img_callback, key=key),
-                queue_size=100,
+                queue_size=1,
                 tcp_nodelay=True,
             )
         self.end_pose_pub = rospy.Publisher(
@@ -252,12 +250,27 @@ class AgilexEnv(gym.Env):
         self.curr_gripper_pos = [np.clip(gripper_state.data * factor, 0.0, 1.0)]
 
     def img_callback(self, image, key):
+        #ros_time = rospy.Time.now()
+        #ros_time_str = f"sec:{ros_time.secs} nsec: {ros_time.nsecs }"  # 秒.毫秒
+        #
+        #rospy.loginfo(f"ROS Time: {ros_time_str}")
+        #stamp = image.header.stamp
+        #rospy.loginfo(f"Image {key} Timestamp: {stamp.secs} nsec: {stamp.nsecs}")
         cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
         # print(f"image shape {key} {cv_image.shape}")
-        self.wrist_img[key] = cv_image
+        cropped_rgb = self.config.IMAGE_CROP[key](cv_image) if key in self.config.IMAGE_CROP else  cv_image
+        resized = cv2.resize(
+            cropped_rgb, self.observation_space["images"][key].shape[:2][::-1]
+        )
+        self.wrist_img[key] = resized
         display_image = {}
         if self.display_image and key == "side":
-            display_image[key] = cv_image
+            display_image[key] =resized #{"img": resized, "id": self.display_img_id}
+            if not self.img_queue.empty():
+                try:
+                    self.img_queue.get_nowait()
+                except queue.Empty:
+                    pass
             self.img_queue.put(display_image)
         # if key not in self.wrist_img:
         #    self.wrist_img[key] = [cv_image]
@@ -320,9 +333,9 @@ class AgilexEnv(gym.Env):
             xyz_delta = action[:3]
             self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
             ## GET ORIENTATION FROM ACTION
-            euler_zxy = [action[5], action[3], action[4]]
+            #euler_zxy = np.array([action[5], action[3], action[4]])
             self.nextpos[3:] = (
-                Rotation.from_euler("zxy", euler_zxy * self.action_scale[1])
+                    Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
                 * Rotation.from_quat(self.curr_end_pos[3:])
             ).as_quat()
 
@@ -333,8 +346,8 @@ class AgilexEnv(gym.Env):
                 cliped_pos = self.clip_safety_box(self.nextpos)
                 # print(f"send step action: {cliped_pos}")
                 self._send_pos_command(cliped_pos)
-        except:
-            print(f"calculate action error {action}")
+        except Exception as e:
+            print(f"calculate action error {action}, exception {e}")
 
         self.curr_path_length += 1
         dt = time.time() - start_time
@@ -389,10 +402,13 @@ class AgilexEnv(gym.Env):
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
+            RESET_joint0 = [-0.0013] + self.curr_joint[1:6]
             JOINT_RESET = [-0.0013, 0.0021, -0.0158, -0.0326, -0.00286, 0.00095]
+            self.send_joint_command(RESET_joint0)
+            time.sleep(0.1)
             self.send_joint_command(JOINT_RESET)
             self._send_gripper_command(1)
-            time.sleep(0.5)
+            time.sleep(1.0)
             return
 
         # Perform Carteasian reset

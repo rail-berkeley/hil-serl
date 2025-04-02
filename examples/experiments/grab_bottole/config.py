@@ -14,6 +14,8 @@ from agilex_env.agilex_env import AgilexEnv
 from experiments.grab_bottole.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
+    SpacemouseIntervention,
+
 )
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import Quat2EulerWrapper
@@ -23,16 +25,21 @@ class RightEnvConfig(DefaultEnvConfig):
     ARM = "right"
     CAMERAS = {
         "wrist": "/camera_r/color/image_raw",
-        "front": "/camera_f/color/image_raw",
+        #"front": "/camera_f/color/image_raw",
         "side": "/camera_s/color/image_raw",
+    }
+    IMAGE_CROP = {
+        "side": lambda img: img[20:430, 30:600],
+        "wrist": lambda img: img[150:480, 0:600],
+        "front": lambda img: img[50:400, 50:600],
     }
     RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
     ABS_POSE_LIMIT_LOW = np.array([0.08, -0.20, 0.12, -1.04, 1.43, -0.24])
-    ABS_POSE_LIMIT_HIGH = np.array([0.5, 0.20, 0.3, 0.04, 1.89, 0.24])
+    ABS_POSE_LIMIT_HIGH = np.array([0.5, 0.20, 0.3, 0.04, 1.74, 0.24])
 
     RANDOM_RESET = False
     ACTION_SCALE = (0.04, 0.2, 1)
-    DISPLAY_IMAGE = False
+    DISPLAY_IMAGE = True
     MAX_EPISODE_LENGTH = 200
 
     GRIPPER_SLEEP = 1.0
@@ -79,7 +86,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["wrist", "front", "side"]
+    image_keys = ["wrist", "side"]
     classifier_keys = ["side"]
     proprio_keys = [
         "tcp_pose",
@@ -87,7 +94,7 @@ class TrainConfig(DefaultTrainingConfig):
         "gripper_pose",
     ]
     buffer_period = 1000
-    checkpoint_period = 500
+    checkpoint_period = 2000
     steps_per_update = 50
     encoder_type = "resnet-pretrained"
     setup_mode = "single-arm-learned-gripper"
@@ -97,6 +104,7 @@ class TrainConfig(DefaultTrainingConfig):
             hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         if not fake_env:
+            env = SpacemouseIntervention(env) 
             env = ExpertIntervWrapper(env)
         # action is assumed to be (x, y, z, rx, ry, rz, gripper)
         # Transform action from end-effector frame to base frame
@@ -120,7 +128,7 @@ class TrainConfig(DefaultTrainingConfig):
                 p = sigmoid(classifier(obs))
                 print(f"reward: {p}")
                 # return int(p > 0.75 and obs['state'][0, 0] > 0.5)
-                return int(p[0] > 0.75)
+                return 0# int(p[0] > 0.75)
 
             env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
         env = GripperPenaltyWrapper(env, penalty=-0.02)

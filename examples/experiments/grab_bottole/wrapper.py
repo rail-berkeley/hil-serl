@@ -418,6 +418,8 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         self.listener_thread = threading.Thread(
             target=self.start_keyboard_listener, daemon=True
         )
+        self.has_success = False
+        self.has_done = False
         self.listener_thread.start()
 
     def on_press(self, key):
@@ -434,6 +436,9 @@ class ExpertIntervWrapper(gym.ActionWrapper):
                     self.AgilexMasterControlMode = True
             if key.char == 'd':
                 self.has_done = True
+            if key.char == 's':
+                print(f"set success {self.has_success}")
+                self.has_success = True 
         except AttributeError:
             print(f"特殊按键: {key}")
 
@@ -443,8 +448,9 @@ class ExpertIntervWrapper(gym.ActionWrapper):
 
     def reset(self, **kwargs):
         self.has_done = False
+        self.has_success = False
         print("reset has done")
-        return self.env.reset(kwargs)
+        return self.env.reset(**kwargs)
 
     def update_expert_pos(self, msg):
         if len(self.expert_pos_deque) >= 100:
@@ -491,13 +497,15 @@ class ExpertIntervWrapper(gym.ActionWrapper):
                     break
                 if not self.AgilexMasterControlMode or time.time() - wait_start > 20.0:
                     return action, False
+
+            # action_arm_pos = np.array(self.expert_pos_deque[-(min(40, len(self.expert_pos_deque)))])
             rot_expert = R.from_quat(expert_arm_pos[3:])
             rot_curr = R.from_quat(action_arm_pos[3:])
-            euler = (rot_expert*rot_curr.inv()).as_euler('zxy')
+            euler = (rot_expert*rot_curr.inv()).as_euler('xyz')
             euler = euler/self.env.action_scale[1]
             expert_action = expert_arm_pos
             expert_action[:3] = (expert_action[:3] - action_arm_pos[:3])/self.env.action_scale[0]
-            expert_action[3:6] = euler
+            expert_action[3:6] = euler #[euler[1], euler[2], euler[0]]
             if len(self.expert_gripper_deque) > 0:
                 normalized_pos = self.expert_gripper_deque[-1]*13.3
                 if normalized_pos > 0.85:
@@ -535,7 +543,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         pos_error = np.linalg.norm(pos1 - pos2)
         print(f"pos error { pos_error}, rot error {rot_error}")
         # 判断是否接近
-        is_close = pos_error < 0.2 and rot_error < 0.3
+        is_close = pos_error < 0.1 and rot_error < 0.3
         return is_close
 
     def step(self, action):
@@ -549,4 +557,5 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             info["intervene_action"] = new_action
         print(f"has_interved {replaced}")
         done = done or self.has_done
+        rew = max(rew, 1 if self.has_success else 0)
         return obs, rew, done, truncated, info

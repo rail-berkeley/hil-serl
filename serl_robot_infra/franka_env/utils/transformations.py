@@ -57,7 +57,7 @@ def construct_adjoint_matrix_from_euler(tcp_pose):
     return adjoint_matrix
 
 
-def construct_homogeneous_matrix_from_euler(order="xyz", tcp_pose):
+def construct_homogeneous_matrix_from_euler(tcp_pose, order="xyz"):
     """
     Construct the homogeneous transformation matrix from given pose.
     args: tcp_pose: (x, y, z, qx, qy, qz, qw)

@@ -46,9 +46,11 @@ class SpaceMouseExpert:
                 ]
                 buttons = state[0].buttons
 
+            #print(f"read state {state}")
+
             # Update the shared state
             self.latest_data["action"] = action
-            self.latest_data["buttons"] = buttons
+            self.latest_data["buttons"] = [buttons[0], buttons[-1]]
 
     def get_action(self) -> Tuple[np.ndarray, list]:
         """Returns the latest action and button state of the SpaceMouse."""

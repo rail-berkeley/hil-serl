@@ -58,6 +58,7 @@ def main(_):
             trajectory = []
             returns = 0
             obs, info = env.reset()
+            time.sleep(3)
             
     if not os.path.exists("./demo_data"):
         os.makedirs("./demo_data")
