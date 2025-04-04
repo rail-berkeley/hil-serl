@@ -152,6 +152,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
     pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
     print(config.buffer_period)
+    from_time = time.time()
     for step in pbar:
         timer.tick("total")
 
@@ -212,6 +213,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
                 info["episode"]["total_interventions"] = total_interventions
                 info["episode"]["intervention_rate"] = total_interventions / (step + 1)
+                info["episode"]["episode_duration"] = time.time() - from_time
                 stats = {"environment": info}  # send stats to the learner to log
                 client.request("send-stats", stats)
                 pbar.set_description(f"last return: {running_return}")
@@ -225,6 +227,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 obs, _ = env.reset()
                 time.sleep(5.0)
                 print("reset end")
+                from_time = time.time()
 
         if step > 0 and config.buffer_period > 0 and step % config.buffer_period == 0:
             # dump to pickle file
