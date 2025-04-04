@@ -13,6 +13,7 @@ import copy
 import pickle as pkl
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
+from pynput import keyboard
 
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
@@ -64,6 +65,15 @@ def print_green(x):
 ##############################################################################
 
 
+failure_key = False
+def on_press(key):
+    global failure_key
+    try:
+        if str(key) == "f":
+            failure_key = True
+    except AttributeError:
+        pass
+
 def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     """
     This is the actor loop, which runs when "--actor" is set to True.
@@ -108,6 +118,10 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         print(f"success rate: {success_counter / FLAGS.eval_n_trajs}")
         print(f"average time: {np.mean(time_list)}")
         return  # after done eval, return and exit
+
+    listener = keyboard.Listener(
+        on_press=on_press)
+    listener.start()
 
     start_step = (
         int(os.path.basename(natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))[-1])[12:-4]) + 1
@@ -176,6 +190,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 info.pop("left")
             if "right" in info:
                 info.pop("right")
+            if failure_key:
+                failure_key = False
+                truncated = True
 
             # override the action with the intervention action
             if "intervene_action" in info:
