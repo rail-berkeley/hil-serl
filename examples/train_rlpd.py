@@ -214,6 +214,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 info["episode"]["total_interventions"] = total_interventions
                 info["episode"]["intervention_rate"] = total_interventions / (step + 1)
                 info["episode"]["episode_duration"] = time.time() - from_time
+                info["episode"]["success_rate"] = running_return
                 stats = {"environment": info}  # send stats to the learner to log
                 client.request("send-stats", stats)
                 pbar.set_description(f"last return: {running_return}")
