@@ -69,9 +69,11 @@ failure_key = False
 def on_press(key):
     global failure_key
     try:
-        if str(key) == "f":
+        if str(key) == "'f'":
+            print(key)
             failure_key = True
     except AttributeError:
+        print("error")
         pass
 
 def actor(agent, data_store, intvn_data_store, env, sampling_rng):
@@ -118,6 +120,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         print(f"success rate: {success_counter / FLAGS.eval_n_trajs}")
         print(f"average time: {np.mean(time_list)}")
         return  # after done eval, return and exit
+
+    global failure_key
 
     listener = keyboard.Listener(
         on_press=on_press)
@@ -167,6 +171,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
     print(config.buffer_period)
     from_time = time.time()
+    cur_steps = 0
     for step in pbar:
         timer.tick("total")
 
@@ -186,11 +191,13 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         with timer.context("step_env"):
 
             next_obs, reward, done, truncated, info = env.step(actions)
+            cur_steps += 1
             if "left" in info:
                 info.pop("left")
             if "right" in info:
                 info.pop("right")
             if failure_key:
+                print("failure detected")
                 failure_key = False
                 truncated = True
 
@@ -223,6 +230,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
             obs = next_obs
             if done or truncated:
+                failure_key = False
+                if "episode" not in info:
+                    info["episode"] = {}
                 info["episode"]["intervention_count"] = intervention_count
                 info["episode"]["intervention_steps"] = intervention_steps
 
@@ -230,6 +240,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
                 info["episode"]["total_interventions"] = total_interventions
                 info["episode"]["intervention_rate"] = total_interventions / (step + 1)
+                info["episode"]["current_intervention_rate"] = intervention_steps / cur_steps
                 info["episode"]["episode_duration"] = time.time() - from_time
                 info["episode"]["success_rate"] = running_return
                 stats = {"environment": info}  # send stats to the learner to log
@@ -238,6 +249,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 running_return = 0.0
                 intervention_count = 0
                 intervention_steps = 0
+                cur_steps = 0
 
                 already_intervened = False
                 client.update()
@@ -472,7 +484,7 @@ def main(_):
         )
         # set up wandb and logging
         wandb_logger = make_wandb_logger(
-            project="hil-serl",
+            project="hil-serl-cubereach2",
             description=FLAGS.exp_name,
             debug=FLAGS.debug,
         )
