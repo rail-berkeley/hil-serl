@@ -10,6 +10,7 @@ from serl_launcher.common.typing import Batch, PRNGKey
 from serl_launcher.common.wandb import WandBLogger
 from serl_launcher.agents.continuous.bc import BCAgent
 from serl_launcher.agents.continuous.sac import SACAgent
+from serl_launcher.agents.continuous.cl import CLAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
 from serl_launcher.agents.continuous.sac_hybrid_dual import SACAgentHybridDualArm
 from serl_launcher.vision.data_augmentations import batched_random_crop
@@ -71,6 +72,55 @@ def make_sac_pixel_agent(
             "std_max": 5,
         },
         critic_network_kwargs={
+            "activations": nn.tanh,
+            "use_layer_norm": True,
+            "hidden_dims": [256, 256],
+        },
+        policy_network_kwargs={
+            "activations": nn.tanh,
+            "use_layer_norm": True,
+            "hidden_dims": [256, 256],
+        },
+        temperature_init=1e-2,
+        discount=discount,
+        backup_entropy=False,
+        critic_ensemble_size=2,
+        critic_subsample_size=None,
+        reward_bias=reward_bias,
+        target_entropy=target_entropy,
+        augmentation_function=make_batch_augmentation_func(image_keys),
+    )
+    return agent
+
+def make_cl_pixel_agent(
+    seed,
+    sample_obs,
+    sample_action,
+    image_keys=("image",),
+    encoder_type="resnet-pretrained",
+    reward_bias=0.0,
+    target_entropy=None,
+    discount=0.97,
+) -> CLAgent:
+    agent = CLAgent.create_pixels(
+        jax.random.PRNGKey(seed),
+        sample_obs,
+        sample_action,
+        encoder_type=encoder_type,
+        use_proprio=True,
+        image_keys=image_keys,
+        policy_kwargs={
+            "tanh_squash_distribution": True,
+            "std_parameterization": "exp",
+            "std_min": 1e-5,
+            "std_max": 5,
+        },
+        critic_network_kwargs={
+            "activations": nn.tanh,
+            "use_layer_norm": True,
+            "hidden_dims": [256, 256],
+        },
+        alpha_network_kwargs={
             "activations": nn.tanh,
             "use_layer_norm": True,
             "hidden_dims": [256, 256],
