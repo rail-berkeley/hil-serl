@@ -3,10 +3,12 @@ examples/experiments/object_handover_agilex/__pycache__
 examples/experiments/object_handover_sim/__pycache__
 examples/experiments/__pycache__
 examples/experiments/grab_bottole/__pycache__
+examples/experiments/move_cup_realman/__pycache__
 serl_robot_infra/agilex_env/__pycache__
 serl_robot_infra/franka_env/utils/__pycache__
 serl_robot_infra/serl_robot_infra.egg-info
 serl_robot_infra/franka_env/camera/__pycache__
 serl_robot_infra/franka_env/envs/__pycache__
 serl_robot_infra/franka_env/spacemouse/__pycache__
+serl_robot_infra/realman_env/__pycache__
 franka_sim/franka_sim/.DS_Store    
