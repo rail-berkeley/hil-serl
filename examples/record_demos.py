@@ -1,3 +1,5 @@
+# How to use: sudo /home/jacob/miniforge3/envs/serl2/bin/python ../../record_demos.py --exp_name cube_reach2 --successes_needed 10
+
 import os
 from tqdm import tqdm
 import numpy as np

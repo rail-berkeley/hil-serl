@@ -133,11 +133,12 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         print(f"average time: {np.mean(time_list)}")
         return  # after done eval, return and exit
 
-    start_step = (
-        int(os.path.basename(natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))[-1])[12:-4]) + 1
+    buffers = (
+        natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
-        else 0
+        else []
     )
+    start_step = 1 if len(buffers) == 0 else int(os.path.basename(buffers[-1])[12:-4]) + 1
 
     datastore_dict = {
         "actor_env": data_store,
@@ -202,7 +203,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         with timer.context("step_env"):
 
             next_obs, reward, done, truncated, info = env.step(actions)
-            reward *= 10
+            reward *= config.reward_scale
             cur_steps += 1
             if "left" in info:
                 info.pop("left")
@@ -283,6 +284,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 info["episode"]["current_intervention_rate"] = intervention_steps / cur_steps
                 info["episode"]["episode_duration"] = time.time() - from_time
                 info["episode"]["success_rate"] = running_return
+                info["episode"]["episode_steps"] = cur_steps
                 stats = {"environment": info}  # send stats to the learner to log
                 client.request("send-stats", stats)
                 pbar.set_description(f"last return: {running_return}")
@@ -348,11 +350,19 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     )
     step = start_step
 
+    if isinstance(agent, SACAgent):
+        train_critic_networks_to_update = frozenset({"critic"})
+        train_networks_to_update = frozenset({"critic", "actor", "temperature"})
+    else:
+        train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
+        train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
+
+
     def stats_callback(type: str, payload: dict) -> dict:
         """Callback for when server receives stats request."""
         assert type == "send-stats", f"Invalid request type: {type}"
         if wandb_logger is not None:
-            wandb_logger.log(payload, step=step)
+            wandb_logger.log(payload, step=step + config.pretraining_steps)
         return {}  # not expecting a response
 
     # Create server
@@ -360,6 +370,19 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     server.register_data_store("actor_env", replay_buffer)
     server.register_data_store("actor_env_intvn", demo_buffer)
     server.start(threaded=True)
+
+    if step == 0:
+        epochs = config.pretraining_steps // config.batch_size
+        print(f"Pretraining on {len(demo_buffer)} demo steps for {config.pretraining_steps} steps ({epochs} epochs)...")
+        for epoch in tqdm.tqdm(range(epochs)):
+            batch = demo_buffer.sample(config.batch_size)
+            agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
+            wandb_logger.log({'pretraining': update_info}, step=(epoch + 1) * config.batch_size)
+        agent = jax.block_until_ready(agent)
+        server.publish_network(agent.state.params)
+        checkpoints.save_checkpoint(
+            os.path.abspath(FLAGS.checkpoint_path), agent.state, step=1, keep=100
+        )
 
     # Loop to wait until replay_buffer is filled
     pbar = tqdm.tqdm(
@@ -398,13 +421,6 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     # wait till the replay buffer is filled with enough data
     timer = Timer()
 
-    if isinstance(agent, SACAgent):
-        train_critic_networks_to_update = frozenset({"critic"})
-        train_networks_to_update = frozenset({"critic", "actor", "temperature"})
-    else:
-        train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
-        train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
-
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
@@ -436,8 +452,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             server.publish_network(agent.state.params)
 
         if step % config.log_period == 0 and wandb_logger:
-            wandb_logger.log(update_info, step=step)
-            wandb_logger.log({"timer": timer.get_average_times()}, step=step)
+            wandb_logger.log(update_info, step=step + config.pretraining_steps)
+            wandb_logger.log({"timer": timer.get_average_times()}, step=step + config.pretraining_steps)
 
         if (
             step > 0
@@ -550,14 +566,19 @@ def main(_):
         )
 
         assert FLAGS.demo_path is not None
+        num_demos = 0
         for path in FLAGS.demo_path:
             with open(path, "rb") as f:
                 transitions = pkl.load(f)
                 for transition in transitions:
                     if 'infos' in transition and 'grasp_penalty' in transition['infos']:
                         transition['grasp_penalty'] = transition['infos']['grasp_penalty']
+                    assert transition['rewards'] < 1 + 1e-6 and transition['rewards'] > -1e-6, f"{transition['rewards']}"
+                    num_demos += transition['rewards']
+                    transition['rewards'] *= config.reward_scale
                     demo_buffer.insert(transition)
         print_green(f"demo buffer size: {len(demo_buffer)}")
+        print_green(f"demo count: {num_demos}")
         print_green(f"online buffer size: {len(replay_buffer)}")
 
         if FLAGS.checkpoint_path is not None and os.path.exists(
