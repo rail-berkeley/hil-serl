@@ -7,7 +7,8 @@ from franka_env.envs.wrappers import (
     Quat2EulerWrapper,
     SpacemouseIntervention,
     MultiCameraBinaryRewardClassifierWrapper,
-    GripperCloseEnv
+    GripperCloseEnv,
+    LastNGripperActionsWrapper,
 )
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.franka_env import DefaultEnvConfig
@@ -132,6 +133,7 @@ class TrainConfig(DefaultTrainingConfig):
         env = RelativeFrame(env)
         env = Quat2EulerWrapper(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
+        env = LastNGripperActionsWrapper(env, 8)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
         if classifier:
             classifier = load_classifier_func(

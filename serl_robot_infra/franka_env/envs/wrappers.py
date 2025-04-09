@@ -395,3 +395,24 @@ class DualGripperPenaltyWrapper(gym.RewardWrapper):
             action = info["intervene_action"]
         reward = self.reward(reward, action)
         return observation, reward, terminated, truncated, info
+
+class LastNGripperActionsWrapper(gym.ObservationWrapper):
+    n: int
+    past_gripper_actions: List[int]
+
+    def __init__(self, env: gym.Env, n: int):
+        super().__init__(env)
+        self.n = n
+        self.past_gripper_actions = [0 for _ in range(n)]
+    
+    def reset(self, **kwargs):
+        self.past_gripper_actions = [0 for _ in range(self.n)]
+        obs, info = self.env.reset(**kwargs)
+        obs = np.concatenate([obs, np.array(self.past_gripper_actions)], axis=0)
+        return obs, info
+    
+    def step(self, action):
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        self.past_gripper_actions = self.past_gripper_actions[1:] + [action[-1]]
+        observation = np.concatenate([observation, np.array(self.past_gripper_actions)], axis=0)
+        return observation, reward, terminated, truncated, info
