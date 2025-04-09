@@ -148,7 +148,7 @@ class TrainConfig(DefaultTrainingConfig):
             def reward_func(obs):
                 sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
                 # added check for z position to further robustify classifier, but should work without as well
-                prob = sigmoid(classifier(obs))[0]
+                prob = sigmoid(classifier(obs[:len(obs) - 8]))[0]
                 if prob > 0.1:
                     print(f"{prob:.2f}")
                 return int(prob > 0.90) # and obs['state'][0, 3] < 0.12
