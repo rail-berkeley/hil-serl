@@ -162,7 +162,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     client.recv_network_callback(update_params)
 
     transitions = []
+    transitions_full_trajs = []
     demo_transitions = []
+    demo_transitions_full_trajs = []
     interventions = []
     this_intervention = None
 
@@ -297,6 +299,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 client.update()
                 print("reset start")
                 obs, _ = env.reset()
+                transitions_full_trajs = transitions
+                demo_transitions_full_trajs = demo_transitions
                 time.sleep(5.0)
                 print("reset end")
                 from_time = time.time()
@@ -313,15 +317,19 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             if not os.path.exists(interventions_buffer_path):
                 os.makedirs(interventions_buffer_path)
             with open(os.path.join(buffer_path, f"transitions_{step}.pkl"), "wb") as f:
-                pkl.dump(transitions, f)
-                transitions = []
+                fp = os.path.join(buffer_path, f"transitions_{step}.pkl")
+                print(f"Dumping {len(transitions_full_trajs)} expert transitions out of {len(transitions)} to {fp} !!!")
+                pkl.dump(transitions_full_trajs, f)
+                transitions = transitions[len(transitions_full_trajs):]
+                transitions_full_trajs = []
             with open(
                 os.path.join(demo_buffer_path, f"transitions_{step}.pkl"), "wb"
             ) as f:
                 fp = os.path.join(demo_buffer_path, f"transitions_{step}.pkl")
-                print(f"Dumping to {fp} !!!")
-                pkl.dump(demo_transitions, f)
-                demo_transitions = []
+                print(f"Dumping {len(demo_transitions_full_trajs)} expert transitions out of {len(demo_transitions)} to {fp} !!!")
+                pkl.dump(demo_transitions_full_trajs, f)
+                demo_transitions = demo_transitions[len(demo_transitions_full_trajs):]
+                demo_transitions_full_trajs = []
             with open(os.path.join(interventions_buffer_path, f"transitions_{step}.pkl"), "wb") as f:
                 fp = os.path.join(interventions_buffer_path, f"transitions_{step}.pkl")
                 print(f"Dumping {len(interventions)} interventions to {fp}")
