@@ -84,6 +84,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     This is the actor loop, which runs when "--actor" is set to True.
     """
     global failure_key
+    global checkpoint_key
 
     listener = keyboard.Listener(
         on_press=on_press)
@@ -267,6 +268,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 masks=1.0 - done,
                 dones=done,
             )
+            if checkpoint_key:
+                breakpoint()
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
             data_store.insert(transition)
@@ -388,8 +391,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         print(f"Pretraining on {len(demo_buffer)} demo steps for {config.pretraining_steps} steps ({epochs} epochs)...")
         for epoch in tqdm.tqdm(range(epochs)):
             batch = demo_buffer.sample(config.batch_size)
-            # agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
-            agent, update_info = agent.update_bc(batch)
+            agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
+            # agent, update_info = agent.update_bc(batch)
             wandb_logger.log({'pretraining': update_info}, step=(epoch + 1) * config.batch_size)
         agent = jax.block_until_ready(agent)
         server.publish_network(agent.state.params)

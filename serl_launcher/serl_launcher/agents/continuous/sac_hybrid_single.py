@@ -233,10 +233,6 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
     def grasp_critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
 
-        if checkpoint_key:
-            breakpoint()
-            checkpoint_key = False
-
         batch_size = batch["rewards"].shape[0]
         grasp_action = (batch["actions"][..., -1]).astype(jnp.int16) + 1 # Cast env action from [-1, 1] to {0, 1, 2}
 
