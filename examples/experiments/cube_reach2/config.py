@@ -24,11 +24,13 @@ class EnvConfig(DefaultEnvConfig):
     SERVER_URL = "http://localhost:5000/"
     REALSENSE_CAMERAS = {
         "wrist_1": {
+            "camera_type": "rs",
             "serial_number": "123622270810",
             "dim": (1280, 720),
             "exposure": 13000,
         },
         "side_1": {
+            "camera_type": "zed",
             "serial_number": "032522250211",
             "dim": (1280, 720),
             "exposure": 13000,

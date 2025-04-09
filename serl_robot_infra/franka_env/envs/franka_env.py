@@ -47,8 +47,8 @@ class DefaultEnvConfig:
 
     SERVER_URL: str = "http://127.0.0.1:5000/"
     REALSENSE_CAMERAS: Dict = {
-        "wrist_1": "130322274175",
-        "wrist_2": "127122270572",
+        # "wrist_1": "130322274175",
+        # "wrist_2": "127122270572",
     }
     IMAGE_CROP: dict[str, callable] = {}
     TARGET_POSE: np.ndarray = np.zeros((6,))
@@ -397,9 +397,17 @@ class FrankaEnv(gym.Env):
 
         self.cap = OrderedDict()
         for cam_name, kwargs in name_serial_dict.items():
-            cap = VideoCapture(
-                RSCapture(name=cam_name, **kwargs)
-            )
+            camera_type = kwargs.get("camera_type", "rs")
+            if camera_type == "rs":
+                cap = VideoCapture(
+                    RSCapture(name=cam_name, **kwargs)
+                )
+            elif camera_type == "zed":
+                cap = VideoCapture(
+                    ZedCapture(name=cam_name, **kwargs)
+                )
+            else:
+                raise NotImplementedError
             self.cap[cam_name] = cap
 
     def close_cameras(self):
