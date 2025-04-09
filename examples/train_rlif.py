@@ -66,11 +66,15 @@ def print_green(x):
 
 
 failure_key = False
+checkpoint_key = False
 def on_press(key):
     global failure_key
+    global checkpoint_key
     try:
         if str(key) == "'f'":
             failure_key = True
+        elif str(key) == "'c'":
+            checkpoint_key = True
     except AttributeError:
         print("error")
         pass
@@ -384,7 +388,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         print(f"Pretraining on {len(demo_buffer)} demo steps for {config.pretraining_steps} steps ({epochs} epochs)...")
         for epoch in tqdm.tqdm(range(epochs)):
             batch = demo_buffer.sample(config.batch_size)
-            agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
+            # agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
+            agent, update_info = agent.update_bc(batch)
             wandb_logger.log({'pretraining': update_info}, step=(epoch + 1) * config.batch_size)
         agent = jax.block_until_ready(agent)
         server.publish_network(agent.state.params)

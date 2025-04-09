@@ -233,6 +233,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
     def grasp_critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
 
+        if checkpoint_key:
+            breakpoint()
+            checkpoint_key = False
+
         batch_size = batch["rewards"].shape[0]
         grasp_action = (batch["actions"][..., -1]).astype(jnp.int16) + 1 # Cast env action from [-1, 1] to {0, 1, 2}
 
@@ -407,6 +411,37 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             ):
                 info[f"{name}_lr"] = opt_state.hyperparams["learning_rate"]
 
+        return self.replace(state=new_state), info
+
+    def loss_bc(self, batch, params: Params, rng: PRNGKey):
+        rng, policy_rng = jax.random.split(rng)
+        action_distributions = self.forward_policy(
+            batch["observations"], rng=policy_rng, grad_params=params
+        )
+        log_probs = action_distributions.log_prob(batch['actions'])
+        loss = jnp.sum(log_probs)
+        info = {
+            'mean_logprob': jnp.mean(log_probs),
+            'std_logprob': jnp.std(log_probs),
+        }
+        return loss, info
+
+    def update_bc(
+        self,
+        batch,
+        pmap_axis: Optional[str] = None,
+    ) -> Tuple["SACAgentHybridSingleArm", dict]:
+        loss_fns = {
+            'critic': lambda params, rng: (0.0, {}),
+            'grasp_critic': lambda params, rng: (0.0, {}),
+            'actor': partial(self.loss_bc, batch),
+            'temperature': lambda params, rng: (0.0, {}),
+        }
+        new_state, info = self.state.apply_loss_fns(
+            loss_fns=loss_fns,
+            pmap_axis=pmap_axis,
+            has_aux=True,
+        )
         return self.replace(state=new_state), info
 
     @partial(jax.jit, static_argnames=("argmax"))
