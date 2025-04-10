@@ -15,6 +15,7 @@ from typing import Dict
 
 from franka_env.camera.video_capture import VideoCapture
 from franka_env.camera.rs_capture import RSCapture
+from franka_env.camera.zed_capture import ZedCapture
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
 
@@ -397,7 +398,8 @@ class FrankaEnv(gym.Env):
 
         self.cap = OrderedDict()
         for cam_name, kwargs in name_serial_dict.items():
-            camera_type = kwargs.get("camera_type", "rs")
+            assert "camera_type" in kwargs
+            camera_type = kwargs['camera_type']
             if camera_type == "rs":
                 cap = VideoCapture(
                     RSCapture(name=cam_name, **kwargs)
