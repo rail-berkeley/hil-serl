@@ -400,6 +400,7 @@ class FrankaEnv(gym.Env):
         for cam_name, kwargs in name_serial_dict.items():
             assert "camera_type" in kwargs
             camera_type = kwargs['camera_type']
+            del kwargs['camera_type']
             if camera_type == "rs":
                 cap = VideoCapture(
                     RSCapture(name=cam_name, **kwargs)

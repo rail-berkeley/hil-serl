@@ -32,7 +32,8 @@ class ZedCapture:
         self.name = name
 
         assert isinstance(serial_number, str), f"Got {type(serial_number)}."
-        assert serial_number in self.get_device_serial_numbers()
+        all_serial_numbers = self.get_device_serial_numbers()
+        assert serial_number in all_serial_numbers, f"No {serial_number} in {all_serial_numbers}."
         self.serial_number = serial_number
 
         self._cam = sl.Camera()
@@ -50,6 +51,8 @@ class ZedCapture:
         if status != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError("Camera Failed To Open")
         self._cam.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, 50)
+
+        self._runtime = sl.RuntimeParameters()
         
         self._left_img = sl.Mat()
         self.zed_resolution = sl.Resolution(0, 0)
@@ -61,7 +64,8 @@ class ZedCapture:
             return False, None
         
         self._cam.retrieve_image(self._left_img, sl.VIEW.LEFT, resolution=self.zed_resolution)
-        frame = deepcopy(frame.get_data())
+        frame = deepcopy(self._left_img.get_data())
+        frame = frame[:,:,:3]
 
         return True, frame
 
