@@ -1,3 +1,6 @@
+# How to use:
+# sudo /home/qirico/miniconda3/envs/hilserl/bin/python ../../record_success_fail.py --exp_name=cube_reach2 --successes_needed=200
+
 import copy
 import os
 from tqdm import tqdm
