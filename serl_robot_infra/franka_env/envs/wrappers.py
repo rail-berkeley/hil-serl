@@ -408,11 +408,13 @@ class LastNGripperActionsWrapper(gym.ObservationWrapper):
     def reset(self, **kwargs):
         self.past_gripper_actions = [0 for _ in range(self.n)]
         obs, info = self.env.reset(**kwargs)
-        obs = np.concatenate([obs, np.array(self.past_gripper_actions)], axis=0)
+        assert isinstance(obs, dict) and 'state' in obs
+        obs['state'] = np.concatenate([obs['state'], np.array(self.past_gripper_actions)], axis=-1)
         return obs, info
     
     def step(self, action):
-        observation, reward, terminated, truncated, info = self.env.step(action)
+        obs, reward, terminated, truncated, info = self.env.step(action)
         self.past_gripper_actions = self.past_gripper_actions[1:] + [action[-1]]
-        observation = np.concatenate([observation, np.array(self.past_gripper_actions)], axis=0)
-        return observation, reward, terminated, truncated, info
+        assert isinstance(obs, dict) and 'state' in obs
+        obs['state'] = np.concatenate([obs['state'], np.array(self.past_gripper_actions)], axis=-1)
+        return obs, reward, terminated, truncated, info

@@ -37,8 +37,8 @@ class EnvConfig(DefaultEnvConfig):
         }
     }
     IMAGE_CROP = {
-        "wrist_1": lambda img: img[0:376, 0:672],
-        "side_1": lambda img: img[320:700, 600:950],
+        "wrist_1": lambda img: img[0:720, 450:1150], # did you know? you can check these values on realsense-viewer even for zed cameras.
+        "side_1": lambda img: img[200:700, 420:1270],
     }
 
     # Step 1: add reset pose
@@ -54,7 +54,7 @@ class EnvConfig(DefaultEnvConfig):
     RANDOM_RZ_RANGE = np.pi / 6
     ACTION_SCALE = np.array([0.1, 0.3, 1]) # Testing x
     DISPLAY_IMAGE = True
-    MAX_EPISODE_LENGTH = 300
+    MAX_EPISODE_LENGTH = 400
 
 
     ## Step 4: Copy the same control parameters -- keep it the same as below : TODO: figure out how to tune these+

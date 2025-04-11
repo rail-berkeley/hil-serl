@@ -7,15 +7,6 @@ except ModuleNotFoundError:
     print("WARNING: You have not setup the ZED cameras, and currently cannot use them")
 import time
 
-resize_func_map = {"cv2": cv2.resize, None: None}
-standard_params = dict(
-    depth_minimum_distance=0.1, camera_resolution=sl.RESOLUTION.HD720, depth_stabilization=False, camera_fps=60, camera_image_flip=sl.FLIP_MODE.OFF
-)
-
-advanced_params = dict(
-    depth_minimum_distance=0.1, camera_resolution=sl.RESOLUTION.HD2K, depth_stabilization=False, camera_fps=15, camera_image_flip=sl.FLIP_MODE.OFF
-)
-
 def print_yellow(x):
     return print("\033[93m {}\033[00m".format(x))
 
@@ -27,7 +18,7 @@ class ZedCapture:
             devices = sl.Camera.get_device_list()
         except NameError:
             return []
-        return [str(d.serial_number) for d in devices]
+        return devices
 
     # https://github.com/droid-dataset/droid/blob/main/droid/camera_utils/camera_readers/zed_camera.py#L32
     def __init__(self, name, serial_number, dim=(640, 480), fps=60, depth=False, exposure=40000):
@@ -36,8 +27,10 @@ class ZedCapture:
         assert depth == False
 
         assert isinstance(serial_number, str), f"Got {type(serial_number)}."
-        all_serial_numbers = self.get_device_serial_numbers()
+        devices = self.get_device_serial_numbers()
+        all_serial_numbers = [str(d.serial_number) for d in devices]
         assert serial_number in all_serial_numbers, f"No {serial_number} in {all_serial_numbers}."
+        self.camera_id = devices[all_serial_numbers.index(serial_number)].id
         self.serial_number = serial_number
 
         self._cam = sl.Camera()
@@ -56,7 +49,21 @@ class ZedCapture:
         status = self._cam.open(sl_params)
         if status != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError("Camera Failed To Open")
-        self._cam.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, 50)
+        # dir: ['AEC_AGC', 'AEC_AGC_ROI', 'ANALOG_GAIN', 'AUTO_ANALOG_GAIN_RANGE', 'AUTO_DIGITAL_GAIN_RANGE', 'AUTO_EXPOSURE_TIME_RANGE',
+        # 'BRIGHTNESS', 'CONTRAST', 'DENOISING', 'DIGITAL_GAIN', 'EXPOSURE', 'EXPOSURE_COMPENSATION', 'EXPOSURE_TIME', 'GAIN', 'GAMMA',
+        # 'HUE', 'LAST', 'LED_STATUS', 'SATURATION', 'SHARPNESS', 'WHITEBALANCE_AUTO', 'WHITEBALANCE_TEMPERATURE']
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.BRIGHTNESS, 4)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.CONTRAST, 4)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.HUE, 0)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.SATURATION, 4)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.SHARPNESS, 3)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.GAMMA, 4)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO, True)
+        # # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, 40)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.AUTO_DIGITAL_GAIN_RANGE, True)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.AUTO_ANALOG_GAIN_RANGE, True)
+        self._cam.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, -1)
+        # self._cam.set_camera_settings(sl.VIDEO_SETTINGS.AUTO_EXPOSURE_TIME_RANGE, True)
 
         assert dim == (self._cam.get_camera_information().camera_configuration.resolution.height,
             self._cam.get_camera_information().camera_configuration.resolution.width)
@@ -83,7 +90,7 @@ class ZedCapture:
         # t1 = time.time()
         self._cam.retrieve_image(self._left_img, sl.VIEW.LEFT, resolution=self.zed_resolution)
         frame = self._left_img.get_data()
-        frame = frame[:,:,:3].copy()
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
         assert frame.shape == (*self.dim, 3)
 
         return True, frame
