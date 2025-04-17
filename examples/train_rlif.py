@@ -32,13 +32,14 @@ from serl_launcher.utils.launcher import (
     make_trainer_config,
     make_wandb_logger,
 )
-from serl_launcher.data.data_store import MemoryEfficientReplayBufferDataStore
+from serl_launcher.data.data_store import MemoryEfficientReplayBufferDataStore, PreferenceBufferDataStore
 
 from experiments.mappings import CONFIG_MAPPING
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
+flags.DEFINE_string("method", "rlif", "valid values: rlif, cl, hil")
 flags.DEFINE_integer("seed", 42, "Random seed.")
 flags.DEFINE_boolean("learner", False, "Whether this is a learner.")
 flags.DEFINE_boolean("actor", False, "Whether this is an actor.")
@@ -94,7 +95,7 @@ def on_press(key):
         print("error")
         pass
 
-def actor(agent, data_store, intvn_data_store, env, sampling_rng):
+def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_store = None):
     """
     This is the actor loop, which runs when "--actor" is set to True.
     """
@@ -167,6 +168,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         "actor_env_intvn": intvn_data_store,
     }
 
+    if pref_data_store is not None:
+        datastore_dict["actor_env_pref"] = pref_data_store
+
     client = TrainerClient(
         "actor_env",
         FLAGS.ip,
@@ -203,6 +207,11 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     intervention_count = 0
     intervention_steps = 0
     total_interventions = 0
+
+    pre_int_obs = None
+    post_int_obs = None
+    a_int_pi = None
+    a_int_exp = None
 
     pbar = tqdm.tqdm(range(start_step, config.max_steps), dynamic_ncols=True)
     print(config.buffer_period)
@@ -245,8 +254,16 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 policy_actions = actions
                 actions = info.pop("intervene_action")
                 intervention_steps += 1
+
+                post_int_obs = next_obs
+
                 if not already_intervened:
                     intervention_count += 1
+
+                    pre_int_obs = obs
+                    a_int_exp = actions
+                    a_int_pi = policy_actions
+
                     this_intervention = dict(
                         t0=cur_steps,
                         t1=cur_steps+1,
@@ -272,10 +289,26 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                         print("Error: Should not be None")
                     interventions.append(this_intervention)
                     this_intervention = None
+                    # add to preference buffer
+                    pref_datapoint = dict(
+                        pre_obs=pre_int_obs,
+                        post_obs=post_int_obs,
+                        a_pi=a_int_pi,
+                        a_exp=a_int_exp,
+                    )
+                    pref_data_store.insert(pref_datapoint)
                 already_intervened = False
-            
+
             if (done or truncated) and this_intervention is not None:
                 interventions.append(this_intervention)
+                # add to preference buffer
+                pref_datapoint = dict(
+                    pre_obs=pre_int_obs,
+                    post_obs=post_int_obs,
+                    a_pi=a_int_pi,
+                    a_exp=a_int_exp,
+                )
+                pref_data_store.insert(pref_datapoint)
                 this_intervention = None
 
             running_return += reward
@@ -338,12 +371,15 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             buffer_path = os.path.join(FLAGS.checkpoint_path, "buffer")
             demo_buffer_path = os.path.join(FLAGS.checkpoint_path, "demo_buffer")
             interventions_buffer_path = os.path.join(FLAGS.checkpoint_path, "interventions")
+            preference_buffer_path = os.path.join(FLAGS.checkpoint_path, "preference_buffer")
             if not os.path.exists(buffer_path):
                 os.makedirs(buffer_path)
             if not os.path.exists(demo_buffer_path):
                 os.makedirs(demo_buffer_path)
             if not os.path.exists(interventions_buffer_path):
                 os.makedirs(interventions_buffer_path)
+            if not os.path.exists(preference_buffer_path):
+                os.makedirs(preference_buffer_path)
             with open(os.path.join(buffer_path, f"transitions_{step}.pkl"), "wb") as f:
                 fp = os.path.join(buffer_path, f"transitions_{step}.pkl")
                 print(f"Dumping {len(transitions_full_trajs)} expert transitions out of {len(transitions)} to {fp} !!!")
@@ -374,7 +410,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 ##############################################################################
 
 
-def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
+def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wandb_logger=None):
     """
     The learner loop, which runs when "--learner" is set to True.
     """
@@ -405,6 +441,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     server = TrainerServer(make_trainer_config(), request_callback=stats_callback)
     server.register_data_store("actor_env", replay_buffer)
     server.register_data_store("actor_env_intvn", demo_buffer)
+    if preference_buffer is not None:
+        server.register_data_store("actor_env_pref", preference_buffer)
     server.start(threaded=True)
 
     if step == 0:
@@ -454,6 +492,12 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         },
         device=sharding.replicate(),
     )
+    preference_iterator = preference_buffer.get_iterator(
+        sample_args={
+            "batch_size": config.batch_size,
+        },
+        device=sharding.replicate(),
+    )
 
     # wait till the replay buffer is filled with enough data
     timer = Timer()
@@ -468,21 +512,39 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
                 batch = next(replay_iterator)
                 demo_batch = next(demo_iterator)
                 batch = concat_batches(batch, demo_batch, axis=0)
+                if preference_buffer is not None:
+                    pref_batch = next(preference_iterator)
 
             with timer.context("train_critics"):
-                agent, critics_info = agent.update(
-                    batch,
-                    networks_to_update=train_critic_networks_to_update,
-                )
+                if preference_buffer is not None:
+                    agent, critics_info = agent.update(
+                        batch,
+                        networks_to_update=train_critic_networks_to_update,
+                        pref_batch=pref_batch,
+                    )
+                else:
+                    agent, critics_info = agent.update(
+                        batch,
+                        networks_to_update=train_critic_networks_to_update,
+                    )
 
         with timer.context("train"):
             batch = next(replay_iterator)
+            pref_batch = next(preference_iterator)
             demo_batch = next(demo_iterator)
             batch = concat_batches(batch, demo_batch, axis=0)
-            agent, update_info = agent.update(
-                batch,
-                networks_to_update=train_networks_to_update,
-            )
+            if preference_buffer is not None:
+                agent, update_info = agent.update(
+                    batch,
+                    networks_to_update=train_networks_to_update,
+                    pref_batch=pref_batch,
+                )
+            else:
+                agent, update_info = agent.update(
+                    batch,
+                    networks_to_update=train_networks_to_update,
+                )
+
         # publish the updated network
         if step > 0 and step % (config.steps_per_update) == 0:
             agent = jax.block_until_ready(agent)
@@ -591,9 +653,20 @@ def main(_):
         )
         return replay_buffer, wandb_logger
 
+    def create_preference_buffer():
+        preference_buffer = PreferenceBufferDataStore(
+            env.observation_space,
+            env.observation_space,
+            env.action_space,
+            env.action_space,
+            config.replay_buffer_capacity,
+        )
+        return preference_buffer
+
     if FLAGS.learner:
         sampling_rng = jax.device_put(sampling_rng, device=sharding.replicate())
         replay_buffer, wandb_logger = create_replay_buffer_and_wandb_logger()
+        preference_buffer = create_preference_buffer()
         demo_buffer = MemoryEfficientReplayBufferDataStore(
             env.observation_space,
             env.action_space,
@@ -617,6 +690,7 @@ def main(_):
         print_green(f"demo buffer size: {len(demo_buffer)}")
         print_green(f"demo count: {num_demos}")
         print_green(f"online buffer size: {len(replay_buffer)}")
+        print_green(f"preference buffer size: {len(preference_buffer)}")
 
         if FLAGS.checkpoint_path is not None and os.path.exists(
             os.path.join(FLAGS.checkpoint_path, "buffer")
@@ -628,6 +702,18 @@ def main(_):
                         replay_buffer.insert(transition)
             print_green(
                 f"Loaded previous buffer data. Replay buffer size: {len(replay_buffer)}"
+            )
+
+        if FLAGS.checkpoint_path is not None and os.path.exists(
+            os.path.join(FLAGS.checkpoint_path, "preference_buffer")
+        ):
+            for file in glob.glob(os.path.join(FLAGS.checkpoint_path, "preference_buffer/*.pkl")):
+                with open(file, "rb") as f:
+                    preferences = pkl.load(f)
+                    for preference in preferences:
+                        preference_buffer.insert(preference)
+            print_green(
+                f"Loaded previous preference buffer data. Preference buffer size: {len(preference_buffer)}"
             )
 
         if FLAGS.checkpoint_path is not None and os.path.exists(
@@ -652,13 +738,17 @@ def main(_):
             replay_buffer,
             demo_buffer=demo_buffer,
             wandb_logger=wandb_logger,
+            preference_buffer=preference_buffer,
         )
 
     elif FLAGS.actor:
         sampling_rng = jax.device_put(sampling_rng, sharding.replicate())
         data_store = QueuedDataStore(10000)  # the queue size on the actor
         intvn_data_store = QueuedDataStore(10000)
-
+        if FLAGS.method == "rlif":
+            pref_data_store = None
+        else:
+            pref_data_store = QueuedDataStore(10000)
         # actor loop
         print_green("starting actor loop")
         actor(
@@ -667,6 +757,7 @@ def main(_):
             intvn_data_store,
             env,
             sampling_rng,
+            pref_data_store,
         )
 
     else:

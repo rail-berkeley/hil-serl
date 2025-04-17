@@ -25,7 +25,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
      - TD3 (policy_kwargs={"std_parameterization": "fixed", "fixed_std": 0.1})
      - REDQ (critic_ensemble_size=10, critic_subsample_size=2)
      - SAC-ensemble (critic_ensemble_size>>1)
-    
+
     Compared to SACAgent (in sac.py), this agent has a hybrid policy, with the gripper actions
     learned using DQN. Use this agent for single arm setups.
     """
@@ -70,7 +70,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return self.forward_critic(
             observations, actions, rng=rng, grad_params=self.state.target_params
         )
-    
+
     def forward_grasp_critic(
         self,
         observations: Data,
@@ -95,7 +95,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
     def forward_target_grasp_critic(
         self,
-        observations: Data, 
+        observations: Data,
         rng: PRNGKey,
     ) -> jax.Array:
         """
@@ -106,7 +106,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             observations, rng=rng, grad_params=self.state.target_params
         )
 
-    def forward_policy( # type: ignore              
+    def forward_policy( # type: ignore
         self,
         observations: Data,
         rng: Optional[PRNGKey] = None,
@@ -160,13 +160,13 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         next_action_distributions = self.forward_policy(
             batch["next_observations"], rng=rng
         )
-        
+
         next_actions, next_actions_log_probs = next_action_distributions.sample_and_log_prob(seed=rng)
         chex.assert_shape(next_actions_log_probs, (batch_size,))
 
         return next_actions, next_actions_log_probs
 
-    def critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
+    def critic_loss_fn(self, batch, pref_batch = None, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
         batch_size = batch["rewards"].shape[0]
         # Extract continuous actions for critic
@@ -220,6 +220,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         chex.assert_equal_shape([predicted_qs, target_qs])
         critic_loss = jnp.mean((predicted_qs - target_qs) ** 2)
 
+        if pref_batch is not None:
+            ...
+
         info = {
             "critic_loss": critic_loss,
             "predicted_qs": jnp.mean(predicted_qs),
@@ -228,7 +231,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
 
         return critic_loss, info
-    
+
 
     def grasp_critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
@@ -249,9 +252,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             rng=rng,
         )
         # For DQN, select actions using online network, evaluate with target network
-        best_next_grasp_action = next_grasp_qs.argmax(axis=-1) 
+        best_next_grasp_action = next_grasp_qs.argmax(axis=-1)
         chex.assert_shape(best_next_grasp_action, (batch_size,))
-        
+
         target_next_grasp_q = target_next_grasp_qs[jnp.arange(batch_size), best_next_grasp_action]
         chex.assert_shape(target_next_grasp_q, (batch_size,))
 
@@ -265,16 +268,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         # Forward pass through the online grasp critic to get predicted Q-values
         predicted_grasp_qs = self.forward_grasp_critic(
-            batch["observations"], 
-            rng=rng, 
+            batch["observations"],
+            rng=rng,
             grad_params=params
         )
         chex.assert_shape(predicted_grasp_qs, (batch_size, 3))
-        
+
         # Select the predicted Q-values for the taken grasp actions in the batch
         predicted_grasp_q = predicted_grasp_qs[jnp.arange(batch_size), grasp_action]
         chex.assert_shape(predicted_grasp_q, (batch_size,))
-        
+
         # Compute MSE loss between predicted and target Q-values
         chex.assert_equal_shape([predicted_grasp_q, target_grasp_q])
         grasp_critic_loss = jnp.mean((predicted_grasp_q - target_grasp_q) ** 2)
@@ -331,11 +334,11 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             grad_params=params,
         )
         return temperature_loss, {"temperature_loss": temperature_loss}
-    
-    def loss_fns(self, batch):
+
+    def loss_fns(self, batch, pref_batch = None):
         return {
-            "critic": partial(self.critic_loss_fn, batch),
-            "grasp_critic": partial(self.grasp_critic_loss_fn, batch),
+            "critic": partial(self.critic_loss_fn, batch, pref_batch),
+            "grasp_critic": partial(self.grasp_critic_loss_fn, batch, pref_batch),
             "actor": partial(self.policy_loss_fn, batch),
             "temperature": partial(self.temperature_loss_fn, batch),
         }
@@ -349,6 +352,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         networks_to_update: FrozenSet[str] = frozenset(
             {"actor", "critic", "grasp_critic", "temperature"}
         ),
+        pref_batch = None,
         **kwargs
     ) -> Tuple["SACAgentHybridSingleArm", dict]:
         """
@@ -459,10 +463,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             ee_actions = dist.mode()
         else:
             ee_actions = dist.sample(seed=seed)
-        
+
         seed, grasp_key = jax.random.split(seed, 2)
         grasp_q_values = self.forward_grasp_critic(observations, rng=grasp_key, train=False)
-        
+
         # Select grasp actions based on the grasp Q-values
         grasp_action = grasp_q_values.argmax(axis=-1)
         grasp_action = grasp_action - 1 # Mapping back to {-1, 0, 1}
@@ -480,6 +484,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         critic_def: nn.Module,
         grasp_critic_def: nn.Module,
         temperature_def: nn.Module,
+        log_alpha_state_def: nn.Module = None,
         # Optimizer
         actor_optimizer_kwargs={
             "learning_rate": 3e-4,
@@ -488,6 +493,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "learning_rate": 3e-4,
         },
         grasp_critic_optimizer_kwargs={
+            "learning_rate": 3e-4,
+        },
+        log_alpha_optimizer_kwargs={
             "learning_rate": 3e-4,
         },
         temperature_optimizer_kwargs={
@@ -513,6 +521,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "temperature": temperature_def,
         }
 
+        if log_alpha_state_def is not None:
+            networks["log_alpha"] = log_alpha_state_def
+
         model_def = ModuleDict(networks)
 
         # Define optimizers
@@ -523,6 +534,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "temperature": make_optimizer(**temperature_optimizer_kwargs),
         }
 
+        if log_alpha_state_def is not None:
+            txs["log_alpha"] = make_optimizer(**log_alpha_optimizer_kwargs)
+
         rng, init_rng = jax.random.split(rng)
 
         params = model_def.init(
@@ -531,6 +545,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             critic=[observations, actions[..., :-1]],
             grasp_critic=[observations],
             temperature=[],
+            log_alpha=[observations, observations],
         )["params"]
 
         rng, create_rng = jax.random.split(rng)
@@ -584,6 +599,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         policy_kwargs: dict = {
             "tanh_squash_distribution": True,
             "std_parameterization": "uniform",
+        },
+        log_alpha_network_kwargs: dict = {
+            "hidden_dims": [256, 256],
         },
         critic_ensemble_size: int = 2,
         critic_subsample_size: Optional[int] = None,
@@ -655,12 +673,12 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         critic_def = partial(
             Critic, encoder=encoders["critic"], network=critic_backbone
         )(name="critic")
-        
+
         grasp_critic_backbone = MLP(**grasp_critic_network_kwargs)
         grasp_critic_def = partial(
             GraspCritic, encoder=encoders["grasp_critic"], network=grasp_critic_backbone
         )(name="grasp_critic")
-        
+
         policy_def = Policy(
             encoder=encoders["actor"],
             network=MLP(**policy_network_kwargs),
