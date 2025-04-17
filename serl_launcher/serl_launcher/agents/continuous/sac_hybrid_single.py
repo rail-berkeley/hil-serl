@@ -220,8 +220,49 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         chex.assert_equal_shape([predicted_qs, target_qs])
         critic_loss = jnp.mean((predicted_qs - target_qs) ** 2)
 
-        if pref_batch is not None:
-            ...
+        if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
+            rng, state_key = jax.random.split(rng)
+
+            # Get Q-values for pre-intervention states
+            o_pre = pref_batch["pre_obs"]
+            o_post = pref_batch["post_obs"]
+
+            # Get actions for pre and post states
+            a_pre = self.forward_policy(o_pre, rng=state_key).sample(seed=state_key)
+            rng, post_key = jax.random.split(rng)
+            a_post = self.forward_policy(o_post, rng=post_key).sample(seed=post_key)
+
+            # Get Q-values for pre and post states
+            o_pre_qf = self.forward_critic(o_pre, a_pre, rng=state_key, grad_params=params)
+            o_post_qf = self.forward_critic(o_post, a_post, rng=post_key, grad_params=params)
+
+            # Apply CL constraint: constraint satisfied if o_pre_qf * constraint_coeff - o_post_qf <= constraint_eps * max(abs(o_pre_qf), abs(o_post_qf))
+            constraint_coeff = self.config["cl"]["constraint_coeff"]
+            constraint_eps = self.config["cl"]["constraint_eps"]
+
+            # Calculate violation (if any)
+            qf_diff = jnp.where(
+                jnp.abs(constraint_coeff * o_pre_qf - o_post_qf) <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
+                0.0,
+                constraint_coeff * o_pre_qf - o_post_qf
+            )
+
+            # Apply Lagrange multiplier if available
+            if "log_alpha_state" in self.state.params:
+                log_alpha_state = self.state.apply_fn(
+                    {"params": self.state.params},
+                    jnp.concatenate([o_pre, o_post], axis=1),
+                    name="log_alpha_state"
+                )
+                alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+                dual_loss = jnp.multiply(alpha_state, qf_diff.mean(axis=0)).mean()
+                critic_loss += dual_loss
+
+                info["dual_loss"] = dual_loss
+                info["alpha_state"] = alpha_state.mean()
+                info["qf_diff"] = qf_diff.mean()
+            else:
+                raise ValueError("log_alpha_state not found in params -- must be there to use CL")
 
         info = {
             "critic_loss": critic_loss,
@@ -233,7 +274,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return critic_loss, info
 
 
-    def grasp_critic_loss_fn(self, batch, params: Params, rng: PRNGKey):
+    def grasp_critic_loss_fn(self, batch, pref_batch = None, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
 
         batch_size = batch["rewards"].shape[0]
@@ -281,6 +322,52 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         # Compute MSE loss between predicted and target Q-values
         chex.assert_equal_shape([predicted_grasp_q, target_grasp_q])
         grasp_critic_loss = jnp.mean((predicted_grasp_q - target_grasp_q) ** 2)
+
+        if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
+            rng, state_key = jax.random.split(rng)
+
+            o_pre = pref_batch["pre_obs"]
+            o_post = pref_batch["post_obs"]
+
+            pre_grasp_qs = self.forward_grasp_critic(o_pre, rng=state_key, grad_params=params)
+            rng, post_key = jax.random.split(rng)
+            post_grasp_qs = self.forward_grasp_critic(o_post, rng=post_key, grad_params=params)
+
+            pre_grasp_q = pre_grasp_qs.max(axis=-1)
+            post_grasp_q = post_grasp_qs.max(axis=-1)
+
+            # constraint satisfied if pre_grasp_q * constraint_coeff - post_grasp_q <= constraint_eps * max(abs(pre_grasp_q), abs(post_grasp_q))
+            constraint_coeff = self.config["cl"]["constraint_coeff"]
+            constraint_eps = self.config["cl"]["constraint_eps"]
+
+            qf_diff = jnp.where(
+                jnp.abs(constraint_coeff * pre_grasp_q - post_grasp_q) <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
+                0.0,
+                constraint_coeff * pre_grasp_q - post_grasp_q
+            )
+
+            if "log_alpha_state" in self.state.params:
+                log_alpha_state = self.state.apply_fn(
+                    {"params": self.state.params},
+                    jnp.concatenate([o_pre, o_post], axis=1),
+                    name="log_alpha_state"
+                )
+                alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+                dual_loss = jnp.multiply(alpha_state, qf_diff).mean()
+                grasp_critic_loss += dual_loss
+
+                info = {
+                    "grasp_critic_loss": grasp_critic_loss,
+                    "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
+                    "target_grasp_qs": jnp.mean(target_grasp_q),
+                    "grasp_rewards": grasp_rewards.mean(),
+                    "grasp_dual_loss": dual_loss,
+                    "grasp_alpha_state": alpha_state.mean(),
+                    "grasp_qf_diff": qf_diff.mean(),
+                }
+                return grasp_critic_loss, info
+            else:
+                raise ValueError("log_alpha_state not found in params -- must be there to use CL")
 
         info = {
             "grasp_critic_loss": grasp_critic_loss,
@@ -335,13 +422,63 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         )
         return temperature_loss, {"temperature_loss": temperature_loss}
 
+    def log_alpha_state_loss_fn(self, pref_batch, params: Params, rng: PRNGKey):
+        if not ("cl" in self.config and self.config["cl"]["enabled"]):
+            return 0.0, {}
+
+        rng, state_key = jax.random.split(rng)
+
+        o_pre = pref_batch["pre_obs"]
+        o_post = pref_batch["post_obs"]
+
+        log_alpha_state = self.state.apply_fn(
+            {"params": params},
+            jnp.concatenate([o_pre, o_post], axis=1),
+            name="log_alpha_state"
+        )
+        alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+
+        a_pre = self.forward_policy(o_pre, rng=state_key).sample(seed=state_key)
+        rng, post_key = jax.random.split(rng)
+        a_post = self.forward_policy(o_post, rng=post_key).sample(seed=post_key)
+
+        o_pre_qf = self.forward_critic(o_pre, a_pre, rng=state_key)
+        o_post_qf = self.forward_critic(o_post, a_post, rng=post_key)
+
+        constraint_coeff = self.config["cl"]["constraint_coeff"]
+        constraint_eps = self.config["cl"]["constraint_eps"]
+
+        qf_diff = jnp.where(
+            jnp.abs(constraint_coeff * o_pre_qf - o_post_qf) <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
+            0.0,
+            constraint_coeff * o_pre_qf - o_post_qf
+        )
+
+        dual_loss = jnp.multiply(alpha_state, qf_diff.mean(axis=0)).mean()
+        log_alpha_loss = -dual_loss
+
+        info = {
+            "log_alpha_state_loss": log_alpha_loss,
+            "log_alpha_state": log_alpha_state.mean(),
+            "alpha_state": alpha_state.mean(),
+            "constraint_value": qf_diff.mean(),
+        }
+
+        return log_alpha_loss, info
+
     def loss_fns(self, batch, pref_batch = None):
-        return {
+        loss_dict = {
             "critic": partial(self.critic_loss_fn, batch, pref_batch),
             "grasp_critic": partial(self.grasp_critic_loss_fn, batch, pref_batch),
             "actor": partial(self.policy_loss_fn, batch),
             "temperature": partial(self.temperature_loss_fn, batch),
         }
+
+        if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
+            if "log_alpha_state" in self.state.params:
+                loss_dict["log_alpha_state"] = partial(self.log_alpha_state_loss_fn, pref_batch)
+
+        return loss_dict
 
     @partial(jax.jit, static_argnames=("pmap_axis", "networks_to_update"))
     def update(
@@ -522,7 +659,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
 
         if log_alpha_state_def is not None:
-            networks["log_alpha"] = log_alpha_state_def
+            networks["log_alpha_state"] = log_alpha_state_def
 
         model_def = ModuleDict(networks)
 
@@ -535,18 +672,25 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
 
         if log_alpha_state_def is not None:
-            txs["log_alpha"] = make_optimizer(**log_alpha_optimizer_kwargs)
+            txs["log_alpha_state"] = make_optimizer(**log_alpha_optimizer_kwargs)
 
         rng, init_rng = jax.random.split(rng)
 
-        params = model_def.init(
-            init_rng,
-            actor=[observations],
-            critic=[observations, actions[..., :-1]],
-            grasp_critic=[observations],
-            temperature=[],
-            log_alpha=[observations, observations],
-        )["params"]
+        # Initialize model parameters
+        init_dict = {
+            "actor": [observations],
+            "critic": [observations, actions[..., :-1]],
+            "grasp_critic": [observations],
+            "temperature": [],
+        }
+
+        # Add log_alpha_state initialization if present
+        if log_alpha_state_def is not None:
+            # Create dummy input with the right shape for initialization
+            doubled_obs = jnp.concatenate([observations, observations], axis=1)
+            init_dict["log_alpha_state"] = [doubled_obs]
+
+        params = model_def.init(init_rng, **init_dict)["params"]
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(
@@ -562,20 +706,36 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if target_entropy is None:
             target_entropy = -actions.shape[-1] / 2
 
+        # Prepare configuration dictionary
+        config_dict = dict(
+            critic_ensemble_size=critic_ensemble_size,
+            critic_subsample_size=critic_subsample_size,
+            discount=discount,
+            soft_target_update_rate=soft_target_update_rate,
+            target_entropy=target_entropy,
+            backup_entropy=backup_entropy,
+            image_keys=image_keys,
+            reward_bias=reward_bias,
+            augmentation_function=augmentation_function,
+            **kwargs,
+        )
+
+        # Add CL configuration if log_alpha_state is provided
+        if log_alpha_state_def is not None:
+            # Default CL configuration
+            cl_config = {
+                "enabled": True,
+                "constraint_eps": 0.1,
+                "constraint_coeff": discount**kwargs.get("intervene_steps", 0),
+            }
+            # Update with any user-provided CL settings
+            if "cl" in kwargs:
+                cl_config.update(kwargs["cl"])
+            config_dict["cl"] = cl_config
+
         return cls(
             state=state,
-            config=dict(
-                critic_ensemble_size=critic_ensemble_size,
-                critic_subsample_size=critic_subsample_size,
-                discount=discount,
-                soft_target_update_rate=soft_target_update_rate,
-                target_entropy=target_entropy,
-                backup_entropy=backup_entropy,
-                image_keys=image_keys,
-                reward_bias=reward_bias,
-                augmentation_function=augmentation_function,
-                **kwargs,
-            ),
+            config=config_dict,
         )
 
     @classmethod
@@ -694,6 +854,15 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             name="temperature",
         )
 
+        # Create log_alpha_state network for CL if enabled
+        log_alpha_state_def = None
+        if kwargs.get("enable_cl", False):
+            log_alpha_state_def = MLP(
+                **log_alpha_network_kwargs,
+                output_dim=critic_ensemble_size,
+                name="log_alpha_state",
+            )
+
         agent = cls.create(
             rng,
             observations,
@@ -702,6 +871,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             critic_def=critic_def,
             grasp_critic_def=grasp_critic_def,
             temperature_def=temperature_def,
+            log_alpha_state_def=log_alpha_state_def,
             critic_ensemble_size=critic_ensemble_size,
             critic_subsample_size=critic_subsample_size,
             image_keys=image_keys,
