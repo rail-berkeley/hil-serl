@@ -151,7 +151,16 @@ def make_sac_pixel_agent_hybrid_single_arm(
     reward_bias=0.0,
     target_entropy=None,
     discount=0.97,
+    enable_cl=False,
+    intervene_steps=0,
+    constraint_eps=0.1,
 ):
+    log_alpha_network_kwargs = {
+        "activations": nn.tanh,
+        "use_layer_norm": True,
+        "hidden_dims": [256, 256],
+    }
+    
     agent = SACAgentHybridSingleArm.create_pixels(
         jax.random.PRNGKey(seed),
         sample_obs,
@@ -180,6 +189,7 @@ def make_sac_pixel_agent_hybrid_single_arm(
             "use_layer_norm": True,
             "hidden_dims": [256, 256],
         },
+        log_alpha_network_kwargs=log_alpha_network_kwargs,
         temperature_init=1e-2,
         discount=discount,
         backup_entropy=False,
@@ -188,6 +198,13 @@ def make_sac_pixel_agent_hybrid_single_arm(
         reward_bias=reward_bias,
         target_entropy=target_entropy,
         augmentation_function=make_batch_augmentation_func(image_keys),
+        enable_cl=enable_cl,
+        intervene_steps=intervene_steps,
+        cl={
+            "enabled": enable_cl,
+            "constraint_eps": constraint_eps,
+            "constraint_coeff": discount**intervene_steps,
+        }
     )
     return agent
 

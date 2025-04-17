@@ -429,6 +429,10 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
         train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
         train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
 
+    if FLAGS.method == "cl" and "log_alpha_state" in agent.state.params:
+        train_critic_networks_to_update = frozenset(train_critic_networks_to_update | {"log_alpha_state"})
+        train_networks_to_update = frozenset(train_networks_to_update | {"log_alpha_state"})
+
 
     def stats_callback(type: str, payload: dict) -> dict:
         """Callback for when server receives stats request."""
@@ -512,6 +516,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
                 batch = next(replay_iterator)
                 demo_batch = next(demo_iterator)
                 batch = concat_batches(batch, demo_batch, axis=0)
+                pref_batch = None
                 if preference_buffer is not None:
                     pref_batch = next(preference_iterator)
 
@@ -530,10 +535,11 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
 
         with timer.context("train"):
             batch = next(replay_iterator)
-            pref_batch = next(preference_iterator)
             demo_batch = next(demo_iterator)
             batch = concat_batches(batch, demo_batch, axis=0)
+
             if preference_buffer is not None:
+                pref_batch = next(preference_iterator)
                 agent, update_info = agent.update(
                     batch,
                     networks_to_update=train_networks_to_update,
@@ -597,6 +603,10 @@ def main(_):
         )
         include_grasp_penalty = False
     elif config.setup_mode == 'single-arm-learned-gripper':
+        enable_cl = FLAGS.method == "cl"
+        intervene_steps = 1  # Default number of steps between pre and post intervention states
+        constraint_eps = 0.1  # Default constraint epsilon
+
         agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(
             seed=FLAGS.seed,
             sample_obs=env.observation_space.sample(),
@@ -604,6 +614,9 @@ def main(_):
             image_keys=config.image_keys,
             encoder_type=config.encoder_type,
             discount=config.discount,
+            enable_cl=enable_cl,
+            intervene_steps=intervene_steps,
+            constraint_eps=constraint_eps,
         )
         include_grasp_penalty = True
     elif config.setup_mode == 'dual-arm-learned-gripper':
@@ -745,10 +758,11 @@ def main(_):
         sampling_rng = jax.device_put(sampling_rng, sharding.replicate())
         data_store = QueuedDataStore(10000)  # the queue size on the actor
         intvn_data_store = QueuedDataStore(10000)
-        if FLAGS.method == "rlif":
-            pref_data_store = None
-        else:
+
+        if FLAGS.method in ["cl"]:
             pref_data_store = QueuedDataStore(10000)
+        else:
+            pref_data_store = None
         # actor loop
         print_green("starting actor loop")
         actor(
