@@ -26,7 +26,7 @@ def main(_):
     def dump_data(transitions):    
         with open(file_name, "wb") as f:
             pkl.dump(transitions, f)
-            print(f"saved {success_needed} demos to {file_name}")
+            print(f"saved {success_count} demos to {file_name}")
     obs, info = env.reset()
     print("Reset done")
     transitions = []
@@ -36,6 +36,8 @@ def main(_):
     trajectory = []
     returns = 0
     
+    cs = 0
+    t0 = time.time()
     while success_count < success_needed:
         actions = np.zeros(env.action_space.sample().shape) 
         next_obs, rew, done, truncated, info = env.step(actions)
@@ -58,6 +60,7 @@ def main(_):
         pbar.set_description(f"Return: {returns}")
 
         obs = next_obs
+        cs += 1
         if done:
             if info["succeed"]:
                 for transition in trajectory:
@@ -68,8 +71,11 @@ def main(_):
             returns = 0
             obs, info = env.reset()
             dump_data(transitions)
+            print(f"{cs} steps in {time.time() - t0}s")
             print("reset start")
             time.sleep(5.0)
+            cs = 0
+            t0 = time.time()
             print("reset end")
             print("==")
 

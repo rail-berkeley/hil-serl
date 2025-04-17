@@ -14,6 +14,7 @@ import pickle as pkl
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
 from pynput import keyboard
+import requests
 
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
@@ -61,20 +62,34 @@ sharding = jax.sharding.PositionalSharding(devices)
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
 
+def print_yellow(x):
+    return print("\033[93m {}\033[00m".format(x))
+
 
 ##############################################################################
 
 
 failure_key = False
 checkpoint_key = False
+pause_key = False
 def on_press(key):
     global failure_key
     global checkpoint_key
+    global pause_key
     try:
         if str(key) == "'f'":
             failure_key = True
         elif str(key) == "'c'":
             checkpoint_key = True
+        elif str(key) == "'r'":
+            print_yellow("reset")
+            requests.post("http://localhost:5000/reset_gripper")
+        elif str(key) == "'t'":
+            print_yellow("close gripper for reset")
+            requests.post("http://localhost:5000/close_gripper")
+        elif str(key) == "'p'":
+            print_yellow("pause")
+            pause_key = not pause_key
     except AttributeError:
         print("error")
         pass
@@ -85,6 +100,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     """
     global failure_key
     global checkpoint_key
+    global pause_key
 
     listener = keyboard.Listener(
         on_press=on_press)
@@ -100,6 +116,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             step=FLAGS.eval_checkpoint_step,
         )
         agent = agent.replace(state=ckpt)
+        print_green(f"Overriding agent with checkpoint at {FLAGS.eval_checkpoint_step}.")
 
         for episode in range(FLAGS.eval_n_trajs):
             print("reset start")
@@ -192,6 +209,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     from_time = time.time()
     cur_steps = 0
     for step in pbar:
+        while pause_key:
+            time.sleep(0.5)
         timer.tick("total")
 
         with timer.context("sample_actions"):
@@ -268,8 +287,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 masks=1.0 - done,
                 dones=done,
             )
-            if checkpoint_key:
-                breakpoint()
+            # if checkpoint_key:
+            #     breakpoint()
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
             data_store.insert(transition)
@@ -294,6 +313,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 info["episode"]["episode_duration"] = time.time() - from_time
                 info["episode"]["success_rate"] = running_return
                 info["episode"]["episode_steps"] = cur_steps
+                info["episode"]["environment_step"] = step
                 stats = {"environment": info}  # send stats to the learner to log
                 client.request("send-stats", stats)
                 pbar.set_description(f"last return: {running_return}")
@@ -308,7 +328,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 obs, _ = env.reset()
                 transitions_full_trajs = transitions
                 demo_transitions_full_trajs = demo_transitions
-                time.sleep(5.0)
+                # input("Waiting for input to proceed...")
+                time.sleep(7.0)
                 print("reset end")
                 from_time = time.time()
 

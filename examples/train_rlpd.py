@@ -14,6 +14,7 @@ import pickle as pkl
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
 from pynput import keyboard
+import requests
 
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
@@ -61,17 +62,34 @@ sharding = jax.sharding.PositionalSharding(devices)
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
 
+def print_yellow(x):
+    return print("\033[93m {}\033[00m".format(x))
+
 
 ##############################################################################
 
 
 failure_key = False
+checkpoint_key = False
+pause_key = False
 def on_press(key):
     global failure_key
+    global checkpoint_key
+    global pause_key
     try:
         if str(key) == "'f'":
-            print(key)
             failure_key = True
+        elif str(key) == "'c'":
+            checkpoint_key = True
+        elif str(key) == "'r'":
+            print_yellow("reset")
+            requests.post("http://localhost:5000/reset_gripper")
+        elif str(key) == "'t'":
+            print_yellow("close gripper for reset")
+            requests.post("http://localhost:5000/close_gripper")
+        elif str(key) == "'p'":
+            print_yellow("pause")
+            pause_key = not pause_key
     except AttributeError:
         print("error")
         pass
@@ -80,6 +98,14 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     """
     This is the actor loop, which runs when "--actor" is set to True.
     """
+    global failure_key
+    global checkpoint_key
+    global pause_key
+
+    listener = keyboard.Listener(
+        on_press=on_press)
+    listener.start()
+
     if FLAGS.eval_checkpoint_step:
         success_counter = 0
         time_list = []
@@ -90,9 +116,13 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             step=FLAGS.eval_checkpoint_step,
         )
         agent = agent.replace(state=ckpt)
+        print_green(f"Overriding agent with checkpoint at {FLAGS.eval_checkpoint_step}.")
 
         for episode in range(FLAGS.eval_n_trajs):
+            print("reset start")
             obs, _ = env.reset()
+            time.sleep(7.0)
+            print("reset end")
             done = False
             start_time = time.time()
             while not done:
@@ -104,10 +134,25 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 )
                 actions = np.asarray(jax.device_get(actions))
 
+                t1 = time.time()
+                # breakpoint()
                 next_obs, reward, done, truncated, info = env.step(actions)
+                t2 = time.time()
+                diff = (t2-t1)
+                # print(f"Control frequency: {1/diff}")
+                # if actions[-1] > 0.5 or actions[-1] < -0.5:
+                    # print(f"prev_obs: {obs['state'][0,0]}")
+                    # print(f"actions: {actions[-1]}")
+                    # print(f"next_obs: {next_obs['state'][0,0]}")
+                if failure_key:
+                    # print(next_obs['state'][0,0])
+                    # failure_key = False
+                    print("failure detected")
+                    failure_key = False
+                    done = True
                 obs = next_obs
 
-                if done:
+                if done or truncated:
                     if reward:
                         dt = time.time() - start_time
                         time_list.append(dt)
@@ -121,17 +166,12 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         print(f"average time: {np.mean(time_list)}")
         return  # after done eval, return and exit
 
-    global failure_key
-
-    listener = keyboard.Listener(
-        on_press=on_press)
-    listener.start()
-
-    start_step = (
-        int(os.path.basename(natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))[-1])[12:-4]) + 1
+    buffers = (
+        natsorted(glob.glob(os.path.join(FLAGS.checkpoint_path, "buffer/*.pkl")))
         if FLAGS.checkpoint_path and os.path.exists(FLAGS.checkpoint_path)
-        else 0
+        else []
     )
+    start_step = 1 if len(buffers) == 0 else int(os.path.basename(buffers[-1])[12:-4]) + 1
 
     datastore_dict = {
         "actor_env": data_store,
@@ -155,9 +195,16 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     client.recv_network_callback(update_params)
 
     transitions = []
+    transitions_full_trajs = []
     demo_transitions = []
+    demo_transitions_full_trajs = []
+    interventions = []
+    this_intervention = None
 
+    print("reset start")
     obs, _ = env.reset()
+    time.sleep(5.0)
+    print("reset end")
     done = False
 
     # training loop
@@ -173,6 +220,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     from_time = time.time()
     cur_steps = 0
     for step in pbar:
+        while pause_key:
+            time.sleep(0.5)
         timer.tick("total")
 
         with timer.context("sample_actions"):
@@ -189,8 +238,16 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
         # Step environment
         with timer.context("step_env"):
-
+            t1 = time.time()
+            # breakpoint()
             next_obs, reward, done, truncated, info = env.step(actions)
+            t2 = time.time()
+            diff = (t2-t1)
+            # print(f"Control frequency: {1/diff}")
+            # print(f"Generated action: {actions}, got: {reward, done, truncated},")
+            # print(info)
+            # print("---")
+            reward *= config.reward_scale
             cur_steps += 1
             if "left" in info:
                 info.pop("left")
@@ -203,13 +260,39 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
 
             # override the action with the intervention action
             if "intervene_action" in info:
+                policy_actions = actions
                 actions = info.pop("intervene_action")
                 intervention_steps += 1
                 if not already_intervened:
                     intervention_count += 1
+                    this_intervention = dict(
+                        t0=cur_steps,
+                        t1=cur_steps+1,
+                        observations=[obs, next_obs],
+                        actions=[actions],
+                        policy_actions=[policy_actions],
+                        dones=[done],
+                        truncateds=[truncated],
+                    )
+                else:
+                    this_intervention['observations'].append(next_obs)
+                    this_intervention['actions'].append(actions)
+                    this_intervention['policy_actions'].append(policy_actions)
+                    this_intervention['dones'].append(done)
+                    this_intervention['truncateds'].append(truncated)
+                    this_intervention['t1'] = cur_steps+1
                 already_intervened = True
             else:
+                if already_intervened:
+                    if this_intervention is None:
+                        print("Error: Should not be None")
+                    interventions.append(this_intervention)
+                    this_intervention = None
                 already_intervened = False
+            
+            if (done or truncated) and this_intervention is not None:
+                interventions.append(this_intervention)
+                this_intervention = None
 
             running_return += reward
             transition = dict(
@@ -220,6 +303,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 masks=1.0 - done,
                 dones=done,
             )
+            # if checkpoint_key:
+            #     breakpoint()
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
             data_store.insert(transition)
@@ -243,6 +328,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 info["episode"]["current_intervention_rate"] = intervention_steps / cur_steps
                 info["episode"]["episode_duration"] = time.time() - from_time
                 info["episode"]["success_rate"] = running_return
+                info["episode"]["episode_steps"] = cur_steps
+                info["episode"]["environment_step"] = step
                 stats = {"environment": info}  # send stats to the learner to log
                 client.request("send-stats", stats)
                 pbar.set_description(f"last return: {running_return}")
@@ -255,7 +342,10 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 client.update()
                 print("reset start")
                 obs, _ = env.reset()
-                time.sleep(5.0)
+                transitions_full_trajs = transitions
+                demo_transitions_full_trajs = demo_transitions
+                # input("Waiting for input to proceed...")
+                time.sleep(7.0)
                 print("reset end")
                 from_time = time.time()
 
@@ -263,20 +353,32 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             # dump to pickle file
             buffer_path = os.path.join(FLAGS.checkpoint_path, "buffer")
             demo_buffer_path = os.path.join(FLAGS.checkpoint_path, "demo_buffer")
+            interventions_buffer_path = os.path.join(FLAGS.checkpoint_path, "interventions")
             if not os.path.exists(buffer_path):
                 os.makedirs(buffer_path)
             if not os.path.exists(demo_buffer_path):
                 os.makedirs(demo_buffer_path)
+            if not os.path.exists(interventions_buffer_path):
+                os.makedirs(interventions_buffer_path)
             with open(os.path.join(buffer_path, f"transitions_{step}.pkl"), "wb") as f:
-                pkl.dump(transitions, f)
-                transitions = []
+                fp = os.path.join(buffer_path, f"transitions_{step}.pkl")
+                print(f"Dumping {len(transitions_full_trajs)} expert transitions out of {len(transitions)} to {fp} !!!")
+                pkl.dump(transitions_full_trajs, f)
+                transitions = transitions[len(transitions_full_trajs):]
+                transitions_full_trajs = []
             with open(
                 os.path.join(demo_buffer_path, f"transitions_{step}.pkl"), "wb"
             ) as f:
                 fp = os.path.join(demo_buffer_path, f"transitions_{step}.pkl")
-                print(f"Dumping to {fp} !!!")
-                pkl.dump(demo_transitions, f)
-                demo_transitions = []
+                print(f"Dumping {len(demo_transitions_full_trajs)} expert transitions out of {len(demo_transitions)} to {fp} !!!")
+                pkl.dump(demo_transitions_full_trajs, f)
+                demo_transitions = demo_transitions[len(demo_transitions_full_trajs):]
+                demo_transitions_full_trajs = []
+            with open(os.path.join(interventions_buffer_path, f"transitions_{step}.pkl"), "wb") as f:
+                fp = os.path.join(interventions_buffer_path, f"transitions_{step}.pkl")
+                print(f"Dumping {len(interventions)} interventions to {fp}")
+                pkl.dump(interventions, f)
+                interventions = []
 
         timer.tock("total")
 
@@ -300,11 +402,19 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     )
     step = start_step
 
+    if isinstance(agent, SACAgent):
+        train_critic_networks_to_update = frozenset({"critic"})
+        train_networks_to_update = frozenset({"critic", "actor", "temperature"})
+    else:
+        train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
+        train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
+
+
     def stats_callback(type: str, payload: dict) -> dict:
         """Callback for when server receives stats request."""
         assert type == "send-stats", f"Invalid request type: {type}"
         if wandb_logger is not None:
-            wandb_logger.log(payload, step=step)
+            wandb_logger.log(payload, step=step + config.pretraining_steps)
         return {}  # not expecting a response
 
     # Create server
@@ -312,6 +422,20 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     server.register_data_store("actor_env", replay_buffer)
     server.register_data_store("actor_env_intvn", demo_buffer)
     server.start(threaded=True)
+
+    if step == 0 and config.pretraining_steps > 0:
+        epochs = config.pretraining_steps // config.batch_size
+        print(f"Pretraining on {len(demo_buffer)} demo steps for {config.pretraining_steps} steps ({epochs} epochs)...")
+        for epoch in tqdm.tqdm(range(epochs)):
+            batch = demo_buffer.sample(config.batch_size)
+            agent, update_info = agent.update(batch, networks_to_update=frozenset({"critic", "grasp_critic", "actor"}))
+            # agent, update_info = agent.update_bc(batch)
+            wandb_logger.log({'pretraining': update_info}, step=(epoch + 1) * config.batch_size)
+        agent = jax.block_until_ready(agent)
+        server.publish_network(agent.state.params)
+        checkpoints.save_checkpoint(
+            os.path.abspath(FLAGS.checkpoint_path), agent.state, step=1, keep=100
+        )
 
     # Loop to wait until replay_buffer is filled
     pbar = tqdm.tqdm(
@@ -350,13 +474,6 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     # wait till the replay buffer is filled with enough data
     timer = Timer()
 
-    if isinstance(agent, SACAgent):
-        train_critic_networks_to_update = frozenset({"critic"})
-        train_networks_to_update = frozenset({"critic", "actor", "temperature"})
-    else:
-        train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
-        train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
-
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
@@ -388,8 +505,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             server.publish_network(agent.state.params)
 
         if step % config.log_period == 0 and wandb_logger:
-            wandb_logger.log(update_info, step=step)
-            wandb_logger.log({"timer": timer.get_average_times()}, step=step)
+            wandb_logger.log(update_info, step=step + config.pretraining_steps)
+            wandb_logger.log({"timer": timer.get_average_times()}, step=step + config.pretraining_steps)
 
         if (
             step > 0
@@ -502,14 +619,19 @@ def main(_):
         )
 
         assert FLAGS.demo_path is not None
+        num_demos = 0
         for path in FLAGS.demo_path:
             with open(path, "rb") as f:
                 transitions = pkl.load(f)
                 for transition in transitions:
                     if 'infos' in transition and 'grasp_penalty' in transition['infos']:
                         transition['grasp_penalty'] = transition['infos']['grasp_penalty']
+                    assert transition['rewards'] < 1 + 1e-6 and transition['rewards'] > -1e-6, f"{transition['rewards']}"
+                    num_demos += transition['rewards']
+                    transition['rewards'] *= config.reward_scale
                     demo_buffer.insert(transition)
         print_green(f"demo buffer size: {len(demo_buffer)}")
+        print_green(f"demo count: {num_demos}")
         print_green(f"online buffer size: {len(replay_buffer)}")
 
         if FLAGS.checkpoint_path is not None and os.path.exists(

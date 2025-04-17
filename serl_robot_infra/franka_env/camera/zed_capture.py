@@ -45,7 +45,7 @@ class ZedCapture:
         sl_params = sl.InitParameters(**sl_params)
         sl_params.set_from_serial_number(int(self.serial_number))
         sl_params.camera_image_flip = sl.FLIP_MODE.OFF
-        # sl_params.depth_mode = sl.DEPTH_MODE.NONE
+        sl_params.depth_mode = sl.DEPTH_MODE.NONE
         status = self._cam.open(sl_params)
         if status != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError("Camera Failed To Open")
@@ -82,6 +82,7 @@ class ZedCapture:
         self.zed_resolution = sl.Resolution(0, 0)
 
     def read(self):
+        #return True, np.zeros((*self.dim, 3))
         err = self._cam.grab(self._runtime)
         if err != sl.ERROR_CODE.SUCCESS:
             print_yellow(f"Warning: No data from camera {self.name}!")
@@ -98,3 +99,20 @@ class ZedCapture:
     def close(self):
         assert hasattr(self, "_cam")
         self._cam.close()
+
+
+if __name__ == '__main__':
+    config = {
+        "name": "wrist1",
+        # "camera_type": "zed",
+        "serial_number": "16744838",
+        "dim": (720, 1280), # height, width
+        "exposure": 12000,
+    }
+    zed = ZedCapture(**config)
+    while True:
+        t1 = time.time()
+        zed.read()
+        t2 = time.time()
+        diff = (t2-t1)
+        print(f"Control frequency: {1/diff}")

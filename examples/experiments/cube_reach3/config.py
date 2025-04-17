@@ -21,7 +21,7 @@ from experiments.cube_reach3.wrapper import CubeReach3Env
 from experiments.usb_pickup_insertion.wrapper import GripperPenaltyWrapper
 
 class EnvConfig(DefaultEnvConfig):
-    SERVER_URL = "http://localhost:5000/"
+    SERVER_URL = "http://127.0.0.1:5000/"
     REALSENSE_CAMERAS = {
         "side_1": {
             "camera_type": "rs",
@@ -29,30 +29,30 @@ class EnvConfig(DefaultEnvConfig):
             "dim": (1280, 720),
             "exposure": 13000,
         },
-        "wrist_1": {
-            "camera_type": "zed",
-            "serial_number": "16744838",
-            "dim": (720, 1280), # height, width
-            "exposure": 12000,
-        }
+        # "wrist_1": {
+        #     "camera_type": "zed",
+        #     "serial_number": "16744838",
+        #     "dim": (720, 1280), # height, width
+        #     "exposure": 12000,
+        # }
     }
     IMAGE_CROP = {
-        "wrist_1": lambda img: img[0:720, 450:1150], # did you know? you can check these values on realsense-viewer even for zed cameras.
-        "side_1": lambda img: img[200:700, 420:1270],
+        # "wrist_1": lambda img: img[0:720, 450:1150], # did you know? you can check these values on realsense-viewer even for zed cameras.
+        "side_1": lambda img: img[260:700, 420:1270],
     }
 
     # Step 1: add reset pose
     RESET_POSE = np.array([0.48, 0.04, 0.24, np.pi, 0, np.pi / 2])
 
     # Step 2: add bounding boxes
-    ABS_POSE_LIMIT_LOW  = np.array([0.42, -0.14, 0.18, np.pi - 0.1, -0.1, np.pi / 2 - 0.1])
-    ABS_POSE_LIMIT_HIGH = np.array([0.51,  0.24, 0.29, np.pi + 0.1,  0.1, np.pi / 2 + 0.1])
+    ABS_POSE_LIMIT_LOW  = np.array([0.42, -0.14, 0.20, np.pi - 0.05, -0.05, np.pi / 2 - 0.05])
+    ABS_POSE_LIMIT_HIGH = np.array([0.51,  0.24, 0.29, np.pi + 0.05,  0.05, np.pi / 2 + 0.05])
 
     # Step 3: set reset randomization
     RANDOM_RESET = True
     RANDOM_XY_RANGE = 0.05
     RANDOM_RZ_RANGE = np.pi / 6
-    ACTION_SCALE = np.array([0.1, 0.3, 1]) # Testing x
+    ACTION_SCALE = np.array([0.05, 0.3, 1]) # Testing x
     DISPLAY_IMAGE = True
     MAX_EPISODE_LENGTH = 400
 
@@ -101,13 +101,13 @@ class EnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["wrist_1", "side_1"]
-    classifier_keys = ["wrist_1", "side_1"]
+    image_keys = ["side_1"]
+    classifier_keys = ["side_1"]
     proprio_keys = ["tcp_pose", "tcp_vel", "tcp_force", "tcp_torque", "gripper_pose"]
     # buffer_period = 1000
     # checkpoint_period = 5000
     # steps_per_update = 50
-    pretraining_steps = 30000 # How many steps to pre-train the model for using RLPD on offline data only.
+    pretraining_steps = 0 # How many steps to pre-train the model for using RLPD on offline data only.
     reward_scale = 10 # How much to scale actual rewards (not RLIF penalties) for RLIF.
     checkpoint_period = 4000
     cta_ratio = 2
@@ -144,7 +144,7 @@ class TrainConfig(DefaultTrainingConfig):
             def reward_func(obs):
                 sigmoid = lambda x: 1 / (1 + jnp.exp(-x))
                 # added check for z position to further robustify classifier, but should work without as well
-                prob = sigmoid(classifier(obs[:len(obs) - 8]))[0]
+                prob = sigmoid(classifier(obs))[0]
                 if prob > 0.1:
                     print(f"{prob:.2f}")
                 return int(prob > 0.90) # and obs['state'][0, 3] < 0.12

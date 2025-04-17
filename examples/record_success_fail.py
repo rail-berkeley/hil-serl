@@ -99,7 +99,7 @@ def main(_):
             obs, _ = env.reset()
             print("reset start")
             dump_data(successes, failures)
-            time.sleep(5.0)
+            time.sleep(7.0)
             print("reset end")
             print("==")
 
