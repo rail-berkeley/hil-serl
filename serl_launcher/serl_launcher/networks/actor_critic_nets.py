@@ -96,6 +96,38 @@ class GraspCritic(nn.Module):
         return value # (batch_size, self.output_dim)
 
 
+class AlphaNetwork(nn.Module):
+    encoder: Optional[nn.Module]
+    network: nn.Module
+    init_final: Optional[float] = None
+    output_dim: Optional[int] = 10
+    
+    @nn.compact
+    def __call__(
+        self, 
+        o_pre,
+        o_post,
+        train: bool = False
+    ) -> jnp.ndarray:
+        if self.encoder is None:
+            o_pre_enc = o_pre
+            o_post_enc = o_post
+        else:
+            o_pre_enc = self.encoder(o_pre)
+            o_post_enc = self.encoder(o_post)
+        obs_enc = jnp.concatenate([o_pre_enc, o_post_enc], axis=-1)
+        
+        outputs = self.network(obs_enc, train)
+        if self.init_final is not None:
+            value = nn.Dense(
+                self.output_dim,
+                kernel_init=nn.initializers.uniform(-self.init_final, self.init_final),
+            )(outputs)
+        else:
+            value = nn.Dense(self.output_dim, kernel_init=default_init())(outputs)
+        return value # (batch_size, self.output_dim)
+
+
 def ensemblize(cls, num_qs, out_axes=0):
     class EnsembleModule(nn.Module):
         @nn.compact

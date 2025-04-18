@@ -108,7 +108,8 @@ class TrainConfig(DefaultTrainingConfig):
     # checkpoint_period = 5000
     # steps_per_update = 50
     pretraining_steps = 0 # How many steps to pre-train the model for using RLPD on offline data only.
-    reward_scale = 10 # How much to scale actual rewards (not RLIF penalties) for RLIF.
+    reward_scale = 1 # How much to scale actual rewards (not RLIF penalties) for RLIF.
+    rlif_minus_one = False
     checkpoint_period = 4000
     cta_ratio = 2
     random_steps = 0

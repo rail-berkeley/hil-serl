@@ -155,12 +155,6 @@ def make_sac_pixel_agent_hybrid_single_arm(
     intervene_steps=0,
     constraint_eps=0.1,
 ):
-    log_alpha_network_kwargs = {
-        "activations": nn.tanh,
-        "use_layer_norm": True,
-        "hidden_dims": [256, 256],
-    }
-    
     agent = SACAgentHybridSingleArm.create_pixels(
         jax.random.PRNGKey(seed),
         sample_obs,
@@ -189,7 +183,11 @@ def make_sac_pixel_agent_hybrid_single_arm(
             "use_layer_norm": True,
             "hidden_dims": [256, 256],
         },
-        log_alpha_network_kwargs=log_alpha_network_kwargs,
+        log_alpha_network_kwargs={
+            "activations": nn.tanh,
+            "use_layer_norm": True,
+            "hidden_dims": [256, 256],
+        },
         temperature_init=1e-2,
         discount=discount,
         backup_entropy=False,

@@ -273,8 +273,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                         dones=[done],
                         truncateds=[truncated],
                     )
-                    print(f"Detected intervention; RLIF replaced reward {reward} with {-1}.")
-                    reward = -1
+                    if config.rlif_minus_one:
+                        print(f"Detected intervention; RLIF replaced reward {reward} with {-1}.")
+                        reward = -1
                 else:
                     this_intervention['observations'].append(next_obs)
                     this_intervention['actions'].append(actions)
@@ -449,7 +450,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
         server.register_data_store("actor_env_pref", preference_buffer)
     server.start(threaded=True)
 
-    if step == 0:
+    if step == 0 and config.pretraining_steps > 0:
         epochs = config.pretraining_steps // config.batch_size
         print(f"Pretraining on {len(demo_buffer)} demo steps for {config.pretraining_steps} steps ({epochs} epochs)...")
         for epoch in tqdm.tqdm(range(epochs)):
@@ -576,6 +577,12 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
 def main(_):
     global config
     config = CONFIG_MAPPING[FLAGS.exp_name]()
+    enable_cl = FLAGS.method == "cl"
+
+    if config.rlif_minus_one:
+        print_green("Using RLIF.")
+    if enable_cl:
+        print_green("Using CL.")
 
     assert config.batch_size % num_devices == 0
     # seed
@@ -603,8 +610,7 @@ def main(_):
         )
         include_grasp_penalty = False
     elif config.setup_mode == 'single-arm-learned-gripper':
-        enable_cl = FLAGS.method == "cl"
-        intervene_steps = 1  # Default number of steps between pre and post intervention states
+        intervene_steps = 0  # Default number of steps between pre and post intervention states
         constraint_eps = 0.1  # Default constraint epsilon
 
         agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(

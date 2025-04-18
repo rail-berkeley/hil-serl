@@ -12,7 +12,7 @@ from serl_launcher.common.common import JaxRLTrainState, ModuleDict, nonpytree_f
 from serl_launcher.common.encoding import EncodingWrapper
 from serl_launcher.common.optimizers import make_optimizer
 from serl_launcher.common.typing import Batch, Data, Params, PRNGKey
-from serl_launcher.networks.actor_critic_nets import Critic, Policy, GraspCritic, ensemblize
+from serl_launcher.networks.actor_critic_nets import Critic, Policy, GraspCritic, ensemblize, AlphaNetwork
 from serl_launcher.networks.lagrange import GeqLagrangeMultiplier
 from serl_launcher.networks.mlp import MLP
 from serl_launcher.utils.train_utils import _unpack
@@ -105,6 +105,19 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return self.forward_grasp_critic(
             observations, rng=rng, grad_params=self.state.target_params
         )
+    
+    def forward_log_alpha(
+        self,
+        o_pre,
+        o_post,
+    ) -> jax.Array:
+        log_alpha_state = self.state.apply_fn(
+            {"params": self.state.params},
+            o_pre,
+            o_post,
+            name="log_alpha_state"
+        )
+        return log_alpha_state
 
     def forward_policy( # type: ignore
         self,
@@ -166,7 +179,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         return next_actions, next_actions_log_probs
 
-    def critic_loss_fn(self, batch, pref_batch = None, params: Params, rng: PRNGKey):
+    def critic_loss_fn(self, batch, pref_batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
         batch_size = batch["rewards"].shape[0]
         # Extract continuous actions for critic
@@ -220,6 +233,13 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         chex.assert_equal_shape([predicted_qs, target_qs])
         critic_loss = jnp.mean((predicted_qs - target_qs) ** 2)
 
+        info = {
+            "critic_loss": critic_loss,
+            "predicted_qs": jnp.mean(predicted_qs),
+            "target_qs": jnp.mean(target_qs),
+            "rewards": batch["rewards"].mean(),
+        }
+
         if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
             rng, state_key = jax.random.split(rng)
 
@@ -248,33 +268,21 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             )
 
             # Apply Lagrange multiplier if available
-            if "log_alpha_state" in self.state.params:
-                log_alpha_state = self.state.apply_fn(
-                    {"params": self.state.params},
-                    jnp.concatenate([o_pre, o_post], axis=1),
-                    name="log_alpha_state"
-                )
-                alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
-                dual_loss = jnp.multiply(alpha_state, qf_diff.mean(axis=0)).mean()
-                critic_loss += dual_loss
+            # assert "log_alpha_state" in self.state.params, "log_alpha_state not found in params -- must be there to use CL"
+            # import pdb; pdb.set_trace()
+            log_alpha_state = self.forward_log_alpha(o_pre, o_post)
+            alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+            dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
+            critic_loss += dual_loss
 
-                info["dual_loss"] = dual_loss
-                info["alpha_state"] = alpha_state.mean()
-                info["qf_diff"] = qf_diff.mean()
-            else:
-                raise ValueError("log_alpha_state not found in params -- must be there to use CL")
-
-        info = {
-            "critic_loss": critic_loss,
-            "predicted_qs": jnp.mean(predicted_qs),
-            "target_qs": jnp.mean(target_qs),
-            "rewards": batch["rewards"].mean(),
-        }
+            info["dual_loss"] = dual_loss
+            info["alpha_state"] = alpha_state.mean()
+            info["qf_diff"] = qf_diff.mean()
 
         return critic_loss, info
 
 
-    def grasp_critic_loss_fn(self, batch, pref_batch = None, params: Params, rng: PRNGKey):
+    def grasp_critic_loss_fn(self, batch, pref_batch, params: Params, rng: PRNGKey):
         """classes that inherit this class can change this function"""
 
         batch_size = batch["rewards"].shape[0]
@@ -346,28 +354,21 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 constraint_coeff * pre_grasp_q - post_grasp_q
             )
 
-            if "log_alpha_state" in self.state.params:
-                log_alpha_state = self.state.apply_fn(
-                    {"params": self.state.params},
-                    jnp.concatenate([o_pre, o_post], axis=1),
-                    name="log_alpha_state"
-                )
-                alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
-                dual_loss = jnp.multiply(alpha_state, qf_diff).mean()
-                grasp_critic_loss += dual_loss
+            log_alpha_state = self.forward_log_alpha(o_pre, o_post)
+            alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+            dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
+            grasp_critic_loss += dual_loss
 
-                info = {
-                    "grasp_critic_loss": grasp_critic_loss,
-                    "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
-                    "target_grasp_qs": jnp.mean(target_grasp_q),
-                    "grasp_rewards": grasp_rewards.mean(),
-                    "grasp_dual_loss": dual_loss,
-                    "grasp_alpha_state": alpha_state.mean(),
-                    "grasp_qf_diff": qf_diff.mean(),
-                }
-                return grasp_critic_loss, info
-            else:
-                raise ValueError("log_alpha_state not found in params -- must be there to use CL")
+            info = {
+                "grasp_critic_loss": grasp_critic_loss,
+                "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
+                "target_grasp_qs": jnp.mean(target_grasp_q),
+                "grasp_rewards": grasp_rewards.mean(),
+                "grasp_dual_loss": dual_loss,
+                "grasp_alpha_state": alpha_state.mean(),
+                "grasp_qf_diff": qf_diff.mean(),
+            }
+            return grasp_critic_loss, info
 
         info = {
             "grasp_critic_loss": grasp_critic_loss,
@@ -423,7 +424,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return temperature_loss, {"temperature_loss": temperature_loss}
 
     def log_alpha_state_loss_fn(self, pref_batch, params: Params, rng: PRNGKey):
-        if not ("cl" in self.config and self.config["cl"]["enabled"]):
+        if not ("cl" in self.config and self.config["cl"]["enabled"] and pref_batch):
             return 0.0, {}
 
         rng, state_key = jax.random.split(rng)
@@ -431,11 +432,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         o_pre = pref_batch["pre_obs"]
         o_post = pref_batch["post_obs"]
 
-        log_alpha_state = self.state.apply_fn(
-            {"params": params},
-            jnp.concatenate([o_pre, o_post], axis=1),
-            name="log_alpha_state"
-        )
+        log_alpha_state = self.forward_log_alpha(o_pre, o_post)
         alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
 
         a_pre = self.forward_policy(o_pre, rng=state_key).sample(seed=state_key)
@@ -474,9 +471,9 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "temperature": partial(self.temperature_loss_fn, batch),
         }
 
-        if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
-            if "log_alpha_state" in self.state.params:
-                loss_dict["log_alpha_state"] = partial(self.log_alpha_state_loss_fn, pref_batch)
+        if "cl" in self.config and self.config["cl"]["enabled"]:
+            print("Doing constraint update.")
+            loss_dict["log_alpha_state"] = partial(self.log_alpha_state_loss_fn, pref_batch)
 
         return loss_dict
 
@@ -520,7 +517,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         )
 
         # Compute gradients and update params
-        loss_fns = self.loss_fns(batch, **kwargs)
+        loss_fns = self.loss_fns(batch, pref_batch=pref_batch, **kwargs)
 
         # Only compute gradients for specified steps
         assert networks_to_update.issubset(
@@ -670,7 +667,6 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "grasp_critic": make_optimizer(**grasp_critic_optimizer_kwargs),
             "temperature": make_optimizer(**temperature_optimizer_kwargs),
         }
-
         if log_alpha_state_def is not None:
             txs["log_alpha_state"] = make_optimizer(**log_alpha_optimizer_kwargs)
 
@@ -687,8 +683,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         # Add log_alpha_state initialization if present
         if log_alpha_state_def is not None:
             # Create dummy input with the right shape for initialization
-            doubled_obs = jnp.concatenate([observations, observations], axis=1)
-            init_dict["log_alpha_state"] = [doubled_obs]
+            init_dict["log_alpha_state"] = [observations, observations]
 
         params = model_def.init(init_rng, **init_dict)["params"]
 
@@ -823,6 +818,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             "critic": encoder_def,
             "actor": encoder_def,
             "grasp_critic": encoder_def,
+            'log_alpha': encoder_def,
         }
 
         # Define networks
@@ -857,11 +853,15 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         # Create log_alpha_state network for CL if enabled
         log_alpha_state_def = None
         if kwargs.get("enable_cl", False):
-            log_alpha_state_def = MLP(
+            log_alpha_state_backbone = MLP(
                 **log_alpha_network_kwargs,
-                output_dim=critic_ensemble_size,
-                name="log_alpha_state",
             )
+            log_alpha_state_def = partial(
+                AlphaNetwork,
+                encoder=encoders['actor'],
+                network=log_alpha_state_backbone, 
+                output_dim=critic_ensemble_size,
+            )(name="log_alpha_state")
 
         agent = cls.create(
             rng,
