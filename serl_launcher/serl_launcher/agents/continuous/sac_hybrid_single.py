@@ -110,14 +110,29 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         self,
         o_pre,
         o_post,
+        grad_params: Optional[Params] = None,
     ) -> jax.Array:
         log_alpha_state = self.state.apply_fn(
-            {"params": self.state.params},
+            {"params": grad_params or self.state.params},
             o_pre,
             o_post,
             name="log_alpha_state"
         )
         return log_alpha_state
+    
+    def forward_log_alpha_gripper(
+        self,
+        o_pre,
+        o_post,
+        grad_params: Optional[Params] = None,
+    ) -> jax.Array:
+        log_alpha_gripper_state = self.state.apply_fn(
+            {"params": grad_params or self.state.params},
+            o_pre,
+            o_post,
+            name="log_alpha_gripper_state"
+        )
+        return log_alpha_gripper_state
 
     def forward_policy( # type: ignore
         self,
@@ -354,8 +369,8 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 constraint_coeff * pre_grasp_q - post_grasp_q
             )
 
-            log_alpha_state = self.forward_log_alpha(o_pre, o_post)
-            alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+            log_alpha_gripper_state = self.forward_log_alpha_gripper(o_pre, o_post)
+            alpha_state = jnp.clip(jnp.exp(log_alpha_gripper_state), 0.0, 1e6)
             dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
             grasp_critic_loss += dual_loss
 
@@ -432,7 +447,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         o_pre = pref_batch["pre_obs"]
         o_post = pref_batch["post_obs"]
 
-        log_alpha_state = self.forward_log_alpha(o_pre, o_post)
+        log_alpha_state = self.forward_log_alpha(o_pre, o_post, grad_params=params)
         alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
 
         a_pre = self.forward_policy(o_pre, rng=state_key).sample(seed=state_key)
@@ -463,6 +478,45 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         return log_alpha_loss, info
 
+    def log_alpha_gripper_state_loss_fn(self, pref_batch, params: Params, rng: PRNGKey):
+        if not ("cl" in self.config and self.config["cl"]["enabled"] and pref_batch):
+            return 0.0, {}
+
+        rng, state_key = jax.random.split(rng)
+
+        o_pre = pref_batch["pre_obs"]
+        o_post = pref_batch["post_obs"]
+
+        pre_grasp_qs = self.forward_grasp_critic(o_pre, rng=state_key)
+        rng, post_key = jax.random.split(rng)
+        post_grasp_qs = self.forward_grasp_critic(o_post, rng=post_key)
+
+        pre_grasp_q = pre_grasp_qs.max(axis=-1)
+        post_grasp_q = post_grasp_qs.max(axis=-1)
+
+        constraint_coeff = self.config["cl"]["constraint_coeff"]
+        constraint_eps = self.config["cl"]["constraint_eps"]
+
+        qf_diff = jnp.where(
+            jnp.abs(constraint_coeff * pre_grasp_q - post_grasp_q) <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
+            0.0,
+            constraint_coeff * pre_grasp_q - post_grasp_q
+        )
+
+        log_alpha_gripper_state = self.forward_log_alpha_gripper(o_pre, o_post, grad_params=params)
+        alpha_state = jnp.clip(jnp.exp(log_alpha_gripper_state), 0.0, 1e6)
+        dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
+        log_alpha_loss = -dual_loss
+
+        info = {
+            "log_alpha_state_loss": log_alpha_loss,
+            "log_alpha_state": log_alpha_gripper_state.mean(),
+            "alpha_state": alpha_state.mean(),
+            "constraint_value": qf_diff.mean(),
+        }
+
+        return log_alpha_loss, info
+
     def loss_fns(self, batch, pref_batch = None):
         loss_dict = {
             "critic": partial(self.critic_loss_fn, batch, pref_batch),
@@ -474,6 +528,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if "cl" in self.config and self.config["cl"]["enabled"]:
             print("Doing constraint update.")
             loss_dict["log_alpha_state"] = partial(self.log_alpha_state_loss_fn, pref_batch)
+            loss_dict["log_alpha_gripper_state"] = partial(self.log_alpha_gripper_state_loss_fn, pref_batch)
 
         return loss_dict
 
@@ -619,6 +674,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         grasp_critic_def: nn.Module,
         temperature_def: nn.Module,
         log_alpha_state_def: nn.Module = None,
+        log_alpha_gripper_state_def: nn.Module = None,
         # Optimizer
         actor_optimizer_kwargs={
             "learning_rate": 3e-4,
@@ -657,6 +713,8 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         if log_alpha_state_def is not None:
             networks["log_alpha_state"] = log_alpha_state_def
+        if log_alpha_gripper_state_def is not None:
+            networks["log_alpha_gripper_state"] = log_alpha_gripper_state_def
 
         model_def = ModuleDict(networks)
 
@@ -669,6 +727,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         }
         if log_alpha_state_def is not None:
             txs["log_alpha_state"] = make_optimizer(**log_alpha_optimizer_kwargs)
+            txs["log_alpha_gripper_state"] = make_optimizer(**log_alpha_optimizer_kwargs)
 
         rng, init_rng = jax.random.split(rng)
 
@@ -684,6 +743,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if log_alpha_state_def is not None:
             # Create dummy input with the right shape for initialization
             init_dict["log_alpha_state"] = [observations, observations]
+            init_dict["log_alpha_gripper_state"] = [observations, observations]
 
         params = model_def.init(init_rng, **init_dict)["params"]
 
@@ -858,10 +918,22 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             )
             log_alpha_state_def = partial(
                 AlphaNetwork,
-                encoder=encoders['actor'],
+                encoder=encoders['log_alpha'],
                 network=log_alpha_state_backbone, 
                 output_dim=critic_ensemble_size,
             )(name="log_alpha_state")
+        
+        log_alpha_gripper_state_def = None
+        if kwargs.get("enable_cl", False):
+            log_alpha_gripper_state_backbone = MLP(
+                **log_alpha_network_kwargs,
+            )
+            log_alpha_gripper_state_def = partial(
+                AlphaNetwork,
+                encoder=encoders['log_alpha'],
+                network=log_alpha_gripper_state_backbone, 
+                output_dim=1,
+            )(name="log_alpha_gripper_state")
 
         agent = cls.create(
             rng,
@@ -872,6 +944,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             grasp_critic_def=grasp_critic_def,
             temperature_def=temperature_def,
             log_alpha_state_def=log_alpha_state_def,
+            log_alpha_gripper_state_def=log_alpha_gripper_state_def,
             critic_ensemble_size=critic_ensemble_size,
             critic_subsample_size=critic_subsample_size,
             image_keys=image_keys,
