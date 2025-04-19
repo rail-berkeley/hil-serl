@@ -1,7 +1,7 @@
 # Run this when you're at the panda robot on the vention table at the center of the lab.
 
 # conda init
-conda activate hilserl
+conda activate hilserl3
 
 sudo chmod a+rw /dev/ttyUSB0
 source ~/catkin_ws/devel/setup.sh
