@@ -105,7 +105,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         return self.forward_grasp_critic(
             observations, rng=rng, grad_params=self.state.target_params
         )
-    
+
     def forward_log_alpha(
         self,
         o_pre,
@@ -119,7 +119,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             name="log_alpha_state"
         )
         return log_alpha_state
-    
+
     def forward_log_alpha_gripper(
         self,
         o_pre,
@@ -277,7 +277,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
             # Calculate violation (if any)
             qf_diff = jnp.where(
-                jnp.abs(constraint_coeff * o_pre_qf - o_post_qf) <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
+                constraint_coeff * o_pre_qf - o_post_qf <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
                 0.0,
                 constraint_coeff * o_pre_qf - o_post_qf
             )
@@ -364,7 +364,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             constraint_eps = self.config["cl"]["constraint_eps"]
 
             qf_diff = jnp.where(
-                jnp.abs(constraint_coeff * pre_grasp_q - post_grasp_q) <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
+                constraint_coeff * pre_grasp_q - post_grasp_q <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
                 0.0,
                 constraint_coeff * pre_grasp_q - post_grasp_q
             )
@@ -461,12 +461,12 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         constraint_eps = self.config["cl"]["constraint_eps"]
 
         qf_diff = jnp.where(
-            jnp.abs(constraint_coeff * o_pre_qf - o_post_qf) <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
+            constraint_coeff * o_pre_qf - o_post_qf <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
             0.0,
             constraint_coeff * o_pre_qf - o_post_qf
         )
 
-        dual_loss = jnp.multiply(alpha_state, qf_diff.mean(axis=0)).mean()
+        dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
         log_alpha_loss = -dual_loss
 
         info = {
@@ -498,7 +498,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         constraint_eps = self.config["cl"]["constraint_eps"]
 
         qf_diff = jnp.where(
-            jnp.abs(constraint_coeff * pre_grasp_q - post_grasp_q) <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
+            constraint_coeff * pre_grasp_q - post_grasp_q <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
             0.0,
             constraint_coeff * pre_grasp_q - post_grasp_q
         )
@@ -919,10 +919,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             log_alpha_state_def = partial(
                 AlphaNetwork,
                 encoder=encoders['log_alpha'],
-                network=log_alpha_state_backbone, 
+                network=log_alpha_state_backbone,
                 output_dim=critic_ensemble_size,
             )(name="log_alpha_state")
-        
+
         log_alpha_gripper_state_def = None
         if kwargs.get("enable_cl", False):
             log_alpha_gripper_state_backbone = MLP(
@@ -931,7 +931,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             log_alpha_gripper_state_def = partial(
                 AlphaNetwork,
                 encoder=encoders['log_alpha'],
-                network=log_alpha_gripper_state_backbone, 
+                network=log_alpha_gripper_state_backbone,
                 output_dim=1,
             )(name="log_alpha_gripper_state")
 
