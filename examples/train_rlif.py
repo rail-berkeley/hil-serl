@@ -121,8 +121,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
 
         for episode in range(FLAGS.eval_n_trajs):
             print("reset start")
+            ### receive signal from learner and then reset
             obs, _ = env.reset()
-            time.sleep(5.0)
+            time.sleep(7.0)
             print("reset end")
             done = False
             start_time = time.time()
@@ -193,6 +194,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
     demo_transitions_full_trajs = []
     interventions = []
     this_intervention = None
+    preference_datas = []
 
     print("reset start")
     obs, _ = env.reset()
@@ -298,6 +300,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                         a_exp=a_int_exp,
                     )
                     pref_data_store.insert(pref_datapoint)
+                    preference_datas.append(pref_datapoint)
                 already_intervened = False
 
             if (done or truncated) and this_intervention is not None:
@@ -400,6 +403,11 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 print(f"Dumping {len(interventions)} interventions to {fp}")
                 pkl.dump(interventions, f)
                 interventions = []
+            with open(os.path.join(preference_buffer_path, f"transitions_{step}.pkl"), "wb") as f:
+                fp = os.path.join(preference_buffer_path, f"transitions_{step}.pkl")
+                print(f"Dumping {len(preference_datas)} interventions to {fp}")
+                pkl.dump(preference_datas, f)
+                preference_datas = []
 
         timer.tock("total")
 
@@ -507,6 +515,20 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
     # wait till the replay buffer is filled with enough data
     timer = Timer()
 
+
+    '''
+    update_steps = 0
+    current_envs_steps = 0
+    while update_steps < max_steps:
+        new_steps = getfromactor - current_env_steps
+        num_updates = new_steps * utd
+        for _ in range(num)
+            update###
+        send signal to actor to get next trajectory
+        
+    
+    
+    '''
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
