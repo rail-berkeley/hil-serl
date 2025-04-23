@@ -50,6 +50,8 @@ flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
 flags.DEFINE_boolean("save_video", False, "Save video.")
 
+flags.DEFINE_float("optimism", 0.0, "Whether or not to add a small amount of bonus to the post-state of interventions.")
+flags.DEFINE_boolean("optimism_done_mask", False, "The done to be set for the optimism transition.")
 flags.DEFINE_boolean(
     "debug", False, "Debug mode."
 )  # debug mode will disable wandb logging
@@ -65,6 +67,9 @@ def print_green(x):
 
 def print_yellow(x):
     return print("\033[93m {}\033[00m".format(x))
+
+def print_cyan(x):
+    return print("\033[96m {}\033[00m".format(x))
 
 
 ##############################################################################
@@ -301,6 +306,17 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                     )
                     pref_data_store.insert(pref_datapoint)
                     preference_datas.append(pref_datapoint)
+
+                    if abs(FLAGS.optimism) < 1e-9:
+                        print_cyan(f"Adding optimism transition with reward={FLAGS.optimism} and done={FLAGS.optimism_done_mask}.")
+                        transition = dict(
+                            observations=obs,
+                            actions=actions,
+                            next_observations=next_obs,
+                            rewards=FLAGS.optimism,
+                            masks=FLAGS.optimism_done_mask, # Used in training, denoting whether or not we're at the end of a trajectory.
+                            dones=done, # Not actually used in training.
+                        )
                 already_intervened = False
 
             if (done or truncated) and this_intervention is not None:
