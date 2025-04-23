@@ -18,6 +18,8 @@ from franka_env.camera.rs_capture import RSCapture
 from franka_env.camera.zed_capture import ZedCapture
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
+def print_yellow(x):
+    return print("\033[93m {}\033[00m".format(x))
 
 class ImageDisplayer(threading.Thread):
     def __init__(self, queue, name):
@@ -436,11 +438,13 @@ class FrankaEnv(gym.Env):
         """Internal function to send gripper command to the robot."""
         if mode == "binary":
             if (pos <= -0.5) and (self.curr_gripper_pos > 0.85) and (time.time() - self.last_gripper_act > self.gripper_sleep):  # close gripper
+                print_yellow("close.")
                 requests.post(self.url + "close_gripper")
                 self.last_gripper_act = time.time()
                 time.sleep(self.gripper_sleep)
             elif (pos >= 0.5) and (self.curr_gripper_pos < 0.85) and (time.time() - self.last_gripper_act > self.gripper_sleep):  # open gripper
-                requests.post(self.url + "open_gripper")
+                print_yellow("open.")
+                requests.post(self.url + "reset_gripper")
                 self.last_gripper_act = time.time()
                 time.sleep(self.gripper_sleep)
             else: 
