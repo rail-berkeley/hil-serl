@@ -271,28 +271,49 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             o_pre_qf = self.forward_critic(o_pre, a_pre, rng=state_key, grad_params=params)
             o_post_qf = self.forward_critic(o_post, a_post, rng=post_key, grad_params=params)
 
-            # Apply CL constraint: constraint satisfied if o_pre_qf * constraint_coeff - o_post_qf <= constraint_eps * max(abs(o_pre_qf), abs(o_post_qf))
-            constraint_coeff = self.config["cl"]["constraint_coeff"]
-            constraint_eps = self.config["cl"]["constraint_eps"]
+            if not self.config["cl"]["soft"]:
+                # Apply CL constraint: constraint satisfied if o_pre_qf * constraint_coeff - o_post_qf <= constraint_eps * max(abs(o_pre_qf), abs(o_post_qf))
+                constraint_coeff = self.config["cl"]["constraint_coeff"]
+                constraint_eps = self.config["cl"]["constraint_eps"]
 
-            # Calculate violation (if any)
-            qf_diff = jnp.where(
-                constraint_coeff * o_pre_qf - o_post_qf <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
-                0.0,
-                constraint_coeff * o_pre_qf - o_post_qf
-            )
+                # Calculate violation (if any)
+                qf_diff = jnp.where(
+                    constraint_coeff * o_pre_qf - o_post_qf <= constraint_eps * jnp.maximum(jnp.abs(o_pre_qf), jnp.abs(o_post_qf)),
+                    0.0,
+                    constraint_coeff * o_pre_qf - o_post_qf
+                )
 
-            # Apply Lagrange multiplier if available
-            # assert "log_alpha_state" in self.state.params, "log_alpha_state not found in params -- must be there to use CL"
-            # import pdb; pdb.set_trace()
-            log_alpha_state = self.forward_log_alpha(o_pre, o_post)
-            alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
-            dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
-            critic_loss += dual_loss
+                # Apply Lagrange multiplier if available
+                # assert "log_alpha_state" in self.state.params, "log_alpha_state not found in params -- must be there to use CL"
+                # import pdb; pdb.set_trace()
+                log_alpha_state = self.forward_log_alpha(o_pre, o_post)
+                alpha_state = jnp.clip(jnp.exp(log_alpha_state), 0.0, 1e6)
+                dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
+                critic_loss += dual_loss
 
-            info["dual_loss"] = dual_loss
-            info["alpha_state"] = alpha_state.mean()
-            info["qf_diff"] = qf_diff.mean()
+                info = info | {
+                    "dual_loss": dual_loss,
+                    "alpha_state": alpha_state.mean(),
+                    "qf_diff": qf_diff.mean(),
+                    "constraint_coeff": constraint_coeff,
+                    "constraint_epsilon": constraint_eps,
+                }
+            else:
+                constraint_coeff = self.config["cl"]["constraint_coeff"]
+                reward_coeff = self.config["cl"]["reward_coeff"]
+
+                state_loss = reward_coeff * (constraint_coeff * o_pre_qf - o_post_qf)
+                state_loss = jnp.where(state_loss < 0, 0.0, state_loss).mean()
+                critic_loss += state_loss
+
+                info = info | {
+                    "state_loss": state_loss,
+                    "constraint_coeff": constraint_coeff,
+                    "reward_coeff": reward_coeff,
+                    "pre_qf": o_pre_qf.mean(),
+                    "post_qf": o_post_qf.mean(),
+                    "percentage_satisfied": jnp.where(state_loss < 0, 1.0, 0.0).mean(),
+                }
 
         return critic_loss, info
 
@@ -346,6 +367,13 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         chex.assert_equal_shape([predicted_grasp_q, target_grasp_q])
         grasp_critic_loss = jnp.mean((predicted_grasp_q - target_grasp_q) ** 2)
 
+        info = {
+            "grasp_critic_loss": grasp_critic_loss,
+            "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
+            "target_grasp_qs": jnp.mean(target_grasp_q),
+            "grasp_rewards": grasp_rewards.mean(),
+        }
+
         if pref_batch is not None and "cl" in self.config and self.config["cl"]["enabled"]:
             rng, state_key = jax.random.split(rng)
 
@@ -359,38 +387,43 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             pre_grasp_q = pre_grasp_qs.max(axis=-1)
             post_grasp_q = post_grasp_qs.max(axis=-1)
 
-            # constraint satisfied if pre_grasp_q * constraint_coeff - post_grasp_q <= constraint_eps * max(abs(pre_grasp_q), abs(post_grasp_q))
-            constraint_coeff = self.config["cl"]["constraint_coeff"]
-            constraint_eps = self.config["cl"]["constraint_eps"]
+            if not self.config["cl"]["soft"]:
+                # constraint satisfied if pre_grasp_q * constraint_coeff - post_grasp_q <= constraint_eps * max(abs(pre_grasp_q), abs(post_grasp_q))
+                constraint_coeff = self.config["cl"]["constraint_coeff"]
+                constraint_eps = self.config["cl"]["constraint_eps"]
 
-            qf_diff = jnp.where(
-                constraint_coeff * pre_grasp_q - post_grasp_q <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
-                0.0,
-                constraint_coeff * pre_grasp_q - post_grasp_q
-            )
+                qf_diff = jnp.where(
+                    constraint_coeff * pre_grasp_q - post_grasp_q <= constraint_eps * jnp.maximum(jnp.abs(pre_grasp_q), jnp.abs(post_grasp_q)),
+                    0.0,
+                    constraint_coeff * pre_grasp_q - post_grasp_q
+                )
 
-            log_alpha_gripper_state = self.forward_log_alpha_gripper(o_pre, o_post)
-            alpha_state = jnp.clip(jnp.exp(log_alpha_gripper_state), 0.0, 1e6)
-            dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
-            grasp_critic_loss += dual_loss
+                log_alpha_gripper_state = self.forward_log_alpha_gripper(o_pre, o_post)
+                alpha_state = jnp.clip(jnp.exp(log_alpha_gripper_state), 0.0, 1e6)
+                dual_loss = jnp.multiply(alpha_state, qf_diff.T).mean()
+                grasp_critic_loss += dual_loss
 
-            info = {
-                "grasp_critic_loss": grasp_critic_loss,
-                "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
-                "target_grasp_qs": jnp.mean(target_grasp_q),
-                "grasp_rewards": grasp_rewards.mean(),
-                "grasp_dual_loss": dual_loss,
-                "grasp_alpha_state": alpha_state.mean(),
-                "grasp_qf_diff": qf_diff.mean(),
-            }
-            return grasp_critic_loss, info
+                info = info | {
+                    "grasp_dual_loss": dual_loss,
+                    "grasp_alpha_state": alpha_state.mean(),
+                    "grasp_qf_diff": qf_diff.mean(),
+                }
+            else:
+                constraint_coeff = self.config["cl"]["constraint_coeff"]
+                reward_coeff = self.config["cl"]["reward_coeff"]
 
-        info = {
-            "grasp_critic_loss": grasp_critic_loss,
-            "predicted_grasp_qs": jnp.mean(predicted_grasp_q),
-            "target_grasp_qs": jnp.mean(target_grasp_q),
-            "grasp_rewards": grasp_rewards.mean(),
-        }
+                state_loss = reward_coeff * (constraint_coeff * pre_grasp_q - post_grasp_q)
+                state_loss = jnp.where(state_loss < 0, 0.0, state_loss).mean()
+                grasp_critic_loss += state_loss
+
+                info = info | {
+                    "state_loss": state_loss,
+                    "constraint_coeff": constraint_coeff,
+                    "reward_coeff": reward_coeff,
+                    "pre_qf": pre_grasp_q.mean(),
+                    "post_qf": post_grasp_q.mean(),
+                    "percentage_satisfied": jnp.where(state_loss < 0, 1.0, 0.0).mean(),
+                }
 
         return grasp_critic_loss, info
 
@@ -578,6 +611,13 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         assert networks_to_update.issubset(
             loss_fns.keys()
         ), f"Invalid gradient steps: {networks_to_update}"
+        if self.config["cl"]["enabled"] and self.config["cl"]["soft"]:
+            assert "log_alpha_state" not in networks_to_update
+            assert "log_alpha_gripper_state" not in networks_to_update
+        elif self.config["cl"]["enabled"] and not self.config["cl"]["soft"]:
+            assert "log_alpha_state" in networks_to_update
+            assert "log_alpha_gripper_state" in networks_to_update
+        
         for key in loss_fns.keys() - networks_to_update:
             loss_fns[key] = lambda params, rng: (0.0, {})
 
@@ -780,10 +820,14 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             # Default CL configuration
             cl_config = {
                 "enabled": True,
+                "soft": True,
                 "constraint_eps": 0.1,
                 "constraint_coeff": discount**kwargs.get("intervene_steps", 0),
+                "reward_coeff": 1.0,
             }
             # Update with any user-provided CL settings
+            assert "cl" in kwargs
+            assert "soft" in kwargs["cl"]
             if "cl" in kwargs:
                 cl_config.update(kwargs["cl"])
             config_dict["cl"] = cl_config

@@ -39,7 +39,7 @@ from experiments.mappings import CONFIG_MAPPING
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
-flags.DEFINE_string("method", "rlif", "valid values: rlif, cl, hil")
+flags.DEFINE_string("method", "rlif", "valid values: rlif, cl, hil, soft_cl")
 flags.DEFINE_integer("seed", 42, "Random seed.")
 flags.DEFINE_boolean("learner", False, "Whether this is a learner.")
 flags.DEFINE_boolean("actor", False, "Whether this is an actor.")
@@ -456,9 +456,11 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
         train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
         train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
 
-    if FLAGS.method == "cl" and "log_alpha_state" in agent.state.params:
-        train_critic_networks_to_update = frozenset(train_critic_networks_to_update | {"log_alpha_state"})
-        train_networks_to_update = frozenset(train_networks_to_update | {"log_alpha_state"})
+    if FLAGS.method == "cl" and FLAGS.method != "soft_cl":
+        assert "modules_log_alpha_state" in agent.state.params
+        assert "modules_log_alpha_gripper_state" in agent.state.params
+        train_critic_networks_to_update = frozenset(train_critic_networks_to_update | {"log_alpha_state", "log_alpha_grasp_state"})
+        train_networks_to_update = frozenset(train_networks_to_update | {"log_alpha_state", "log_alpha_grasp_state"})
 
 
     def stats_callback(type: str, payload: dict) -> dict:
@@ -618,7 +620,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
 def main(_):
     global config
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    enable_cl = FLAGS.method == "cl"
+    enable_cl = FLAGS.method in ["cl", "soft_cl"]
 
     if config.rlif_minus_one:
         print_green("Using RLIF.")
@@ -809,7 +811,7 @@ def main(_):
         data_store = QueuedDataStore(10000)  # the queue size on the actor
         intvn_data_store = QueuedDataStore(10000)
 
-        if FLAGS.method in ["cl"]:
+        if FLAGS.method in ["cl", "soft_cl"]:
             pref_data_store = QueuedDataStore(10000)
         else:
             pref_data_store = None
