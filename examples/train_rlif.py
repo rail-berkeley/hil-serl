@@ -298,16 +298,17 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                     interventions.append(this_intervention)
                     this_intervention = None
                     # add to preference buffer
-                    pref_datapoint = dict(
-                        pre_obs=pre_int_obs,
-                        post_obs=post_int_obs,
-                        a_pi=a_int_pi,
-                        a_exp=a_int_exp,
-                    )
-                    pref_data_store.insert(pref_datapoint)
-                    preference_datas.append(pref_datapoint)
+                    if FLAGS.method != 'rlif':
+                        pref_datapoint = dict(
+                            pre_obs=pre_int_obs,
+                            post_obs=post_int_obs,
+                            a_pi=a_int_pi,
+                            a_exp=a_int_exp,
+                        )
+                        pref_data_store.insert(pref_datapoint)
+                        preference_datas.append(pref_datapoint)
 
-                    if abs(FLAGS.optimism) < 1e-9:
+                    if abs(FLAGS.optimism) > 1e-9:
                         print_cyan(f"Adding optimism transition with reward={FLAGS.optimism} and done={FLAGS.optimism_done_mask}.")
                         transition = dict(
                             observations=obs,
@@ -322,14 +323,15 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
             if (done or truncated) and this_intervention is not None:
                 interventions.append(this_intervention)
                 # add to preference buffer
-                pref_datapoint = dict(
-                    pre_obs=pre_int_obs,
-                    post_obs=post_int_obs,
-                    a_pi=a_int_pi,
-                    a_exp=a_int_exp,
-                )
-                pref_data_store.insert(pref_datapoint)
-                this_intervention = None
+                if FLAGS.method != 'rlif':
+                    pref_datapoint = dict(
+                        pre_obs=pre_int_obs,
+                        post_obs=post_int_obs,
+                        a_pi=a_int_pi,
+                        a_exp=a_int_exp,
+                    )
+                    pref_data_store.insert(pref_datapoint)
+                    this_intervention = None
 
             running_return += reward
             transition = dict(
@@ -521,12 +523,13 @@ def learner(rng, agent, replay_buffer, demo_buffer, preference_buffer = None, wa
         },
         device=sharding.replicate(),
     )
-    preference_iterator = preference_buffer.get_iterator(
-        sample_args={
-            "batch_size": config.batch_size,
-        },
-        device=sharding.replicate(),
-    )
+    if FLAGS.method != 'rlif':
+        preference_iterator = preference_buffer.get_iterator(
+            sample_args={
+                "batch_size": config.batch_size,
+            },
+            device=sharding.replicate(),
+        )
 
     # wait till the replay buffer is filled with enough data
     timer = Timer()
@@ -711,6 +714,8 @@ def main(_):
         return replay_buffer, wandb_logger
 
     def create_preference_buffer():
+        if FLAGS.method in ["rlif"]:
+            return None
         preference_buffer = PreferenceBufferDataStore(
             env.observation_space,
             env.observation_space,
@@ -747,7 +752,8 @@ def main(_):
         print_green(f"demo buffer size: {len(demo_buffer)}")
         print_green(f"demo count: {num_demos}")
         print_green(f"online buffer size: {len(replay_buffer)}")
-        print_green(f"preference buffer size: {len(preference_buffer)}")
+        if preference_buffer is not None:
+            print_green(f"preference buffer size: {len(preference_buffer)}")
 
         if FLAGS.checkpoint_path is not None and os.path.exists(
             os.path.join(FLAGS.checkpoint_path, "buffer")
@@ -761,7 +767,7 @@ def main(_):
                 f"Loaded previous buffer data. Replay buffer size: {len(replay_buffer)}"
             )
 
-        if FLAGS.checkpoint_path is not None and os.path.exists(
+        if preference_buffer is not None and FLAGS.checkpoint_path is not None and os.path.exists(
             os.path.join(FLAGS.checkpoint_path, "preference_buffer")
         ):
             for file in glob.glob(os.path.join(FLAGS.checkpoint_path, "preference_buffer/*.pkl")):

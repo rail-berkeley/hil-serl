@@ -1,6 +1,6 @@
-# sudo /home/qirico/miniconda3/envs/hilserl/bin/python ../../../record_success_fail.py --exp_name=cube_reach3
-# sudo /home/qirico/miniconda3/envs/hilserl/bin/python ../../../train_reward_classifier.py --exp_name=cube_reach3
-# sudo /home/qirico/miniconda3/envs/hilserl/bin/python ../../../record_demos.py --exp_name=cube_reach3 --successes_needed=20
+# sudo /home/qirico/miniconda3/envs/hilserl3/bin/python ../../../record_success_fail.py --exp_name=cube_reach3
+# sudo /home/qirico/miniconda3/envs/hilserl3/bin/python ../../../train_reward_classifier.py --exp_name=cube_reach3
+sudo /home/qirico/miniconda3/envs/hilserl3/bin/python ../../../record_demos.py --exp_name=cube_reach3 --successes_needed=20
 
 # sudo /home/qirico/miniconda3/envs/hilserl/bin/python ../../../train_bc.py \
 #     --exp_name=cube_reach3 \
