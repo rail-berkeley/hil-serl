@@ -41,9 +41,9 @@ class RelativeFrame(gym.Wrapper):
     def step(self, action: np.ndarray):
         # action is assumed to be (x, y, z, rx, ry, rz, gripper)
         # Transform action from end-effector frame to base frame
-        print("enter relative step")
+        #print("enter relative step")
         transformed_action = self.transform_action(action)
-        print(f"transformed action {transformed_action}")
+        #print(f"transformed action {transformed_action}")
         obs, reward, done, truncated, info = self.env.step(transformed_action)
         info['original_state_obs'] = copy.deepcopy(obs['state'])
 

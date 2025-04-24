@@ -483,10 +483,10 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             wait_start = time.time()
             while True:
                 action_arm_pos = np.array(self.env.curr_end_pos)
-                if len(self.expert_pos_deque) == 0:
-                    return action, False
-                expert_arm_pos = self.expert_pos_deque[-1]
-                print(f"wraper action {action_arm_pos}")
+                #if len(self.expert_pos_deque) == 0:
+                #    return action, False
+                expert_arm_pos = [] #self.expert_pos_deque[-1]
+                print(f"wraper action {self.has_align_expert}")
                 print(f"wraper expert {expert_arm_pos}")
                 if not self.has_align_expert and not self.is_pos_close(
                     action_arm_pos, expert_arm_pos
@@ -522,6 +522,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             return action, False
 
     def is_pos_close(self, q1, q2):
+        return False
         """
         计算两个四元数之间的旋转角度误差（弧度）。
         q1, q2: [qx, qy, qz, qw] 形式的四元数

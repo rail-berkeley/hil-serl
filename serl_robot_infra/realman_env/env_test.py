@@ -1,5 +1,5 @@
-from agilex_env import AgilexEnv
-from agilex_env import DefaultEnvConfig
+from realman_env import AgilexEnv
+from realman_env import DefaultEnvConfig
 import numpy as np
 
 import time
@@ -76,13 +76,13 @@ env = AgilexEnv(
 count = 0
 while True:
     if count == 0:
-        position = [0.277, 0.07, 0.267, 45, 90.0, 0, 0]
-        euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
-        env._send_gripper_command(0.06)
+        position = [-0.2, 0.0, 0.307, 191.0, 0.0, 0.0, 0]
+        euler = [3.140, 0.0, 0.0] #[position[a] * 3.1415926 / 180 for a in range(3, 6)]
+        env._send_gripper_command(20, "f")
     elif count == 400:
-        position = [0.237, -0.07, 0.367, 0, 90.0, 0, 0]
-        euler = [position[a] * 3.1415926 / 180 for a in range(3, 6)]
-        env._send_gripper_command(0.02)
+        position = [-0.307, -0.07, 0.305, 0.0, 0.0, 0, 0]
+        euler = [3.14, 0.0, 0.0] #[position[a] * 3.1415926 / 180 for a in range(3, 6)]
+        env._send_gripper_command(200, "f")
     elif count == 800:
         count = -1
     else:
@@ -96,6 +96,6 @@ while True:
     print(f"quat: {quat}")
     new_euler = euler_from_quaternion(quat)
     print(f"new euler: {new_euler}")
-    env._send_pos_command(pose)
+    #env._send_pos_command(pose)
     time.sleep(0.01)
     count += 1

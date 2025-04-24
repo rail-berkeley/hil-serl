@@ -9,8 +9,8 @@ from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
 
 from experiments.config import DefaultTrainingConfig
-from agilex_env.agilex_env import DefaultEnvConfig
-from agilex_env.agilex_env import AgilexEnv
+from realman_env.realman_env import DefaultEnvConfig
+from realman_env.realman_env import AgilexEnv
 from experiments.grab_bottole.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
@@ -24,23 +24,23 @@ from franka_env.envs.wrappers import Quat2EulerWrapper
 class RightEnvConfig(DefaultEnvConfig):
     ARM = "right"
     CAMERAS = {
-        #"wrist": "/camera_r/color/image_raw",
+        "wrist": "/wrist/color/image_raw",
         #"front": "/camera_f/color/image_raw",
-        "side": "/camera/color/image_raw",
+        "side": "/side/color/image_raw",
     }
     IMAGE_CROP = {
-        "side": lambda img: img[20:430, 30:600],
-        "wrist": lambda img: img[150:480, 0:600],
+        "side": lambda img: img[250:600, 200:600],
+        "wrist": lambda img: img[0:450, 300:700],
         "front": lambda img: img[50:400, 50:600],
     }
-    RESET_POSE = np.array([0.10, 0.00, 0.206, 0, 1.483, 0])
-    ABS_POSE_LIMIT_LOW = np.array([-0.50, -0.15, 0.09, -1.04, -0.17, -0.70])
-    ABS_POSE_LIMIT_HIGH = np.array([-0.10, 0.15, 0.27, 0.04, 0.17, 0.17])
+    RESET_POSE = np.array([-0.20, 0.00, 0.35, 3.14, 0.0, 0.0])
+    ABS_POSE_LIMIT_LOW = np.array([-0.35, -0.20, 0.25, 3.10, -0.10, -0.05])
+    ABS_POSE_LIMIT_HIGH = np.array([-0.20, 0.20, 0.35, 3.15, 0.10, 0.07])
 
     RANDOM_RESET = False
-    ACTION_SCALE = (0.04, 0.2, 1)
+    ACTION_SCALE = (0.08, 0.2, 1)
     DISPLAY_IMAGE = True
-    MAX_EPISODE_LENGTH = 200
+    MAX_EPISODE_LENGTH = 400
 
     GRIPPER_SLEEP = 1.0
     COMPLIANCE_PARAM = {
@@ -86,7 +86,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["side"]
+    image_keys = ["side", "wrist"]
     classifier_keys = ["side"]
     proprio_keys = [
         "tcp_pose",
@@ -94,14 +94,14 @@ class TrainConfig(DefaultTrainingConfig):
         "gripper_pose",
     ]
     buffer_period = 1000
-    checkpoint_period = 2000
+    checkpoint_period = 1000
     steps_per_update = 50
     encoder_type = "resnet-pretrained"
     setup_mode = "single-arm-learned-gripper"
 
     def get_environment(self, fake_env=False, save_video=False, classifier=False):
         env = AgilexEnv(
-            hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
+            hz=10, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         if not fake_env:
             env = SpacemouseIntervention(env)

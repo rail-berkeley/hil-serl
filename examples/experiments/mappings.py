@@ -11,6 +11,10 @@
 # )
 from experiments.grab_bottole.config import TrainConfig as GrabBottoleAgilexTrainConfig
 #from experiments.grab_bottole_sim.config import TrainConfig as GrabBottoleSimTrainConfig
+from experiments.move_cup_realman.config import TrainConfig as MoveCupRealmanTrainConfig
+from experiments.lift_cup.config import TrainConfig as LiftCupTrainConfig
+from experiments.place_power_bank.config import TrainConfig as PlacePowerBankTrainConfig
+from experiments.pick_pen.config import TrainConfig as PickPenTrainConfig
 
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
@@ -20,5 +24,9 @@ CONFIG_MAPPING = {
     #"object_handover_sim": ObjectHandoverSimTrainConfig,
     # "object_handover_agilex": ObjectHandoverAgilexTrainConfig,
     "grab_bottole": GrabBottoleAgilexTrainConfig,
+    "move_cup": MoveCupRealmanTrainConfig,
+    "lift_cup": LiftCupTrainConfig,
+    "place_power_bank": PlacePowerBankTrainConfig,
+    "pick_pen": PickPenTrainConfig
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

@@ -106,6 +106,8 @@ class AgilexEnv(gym.Env):
         self.max_episode_length = config.MAX_EPISODE_LENGTH
         self.display_image = config.DISPLAY_IMAGE
         self.gripper_sleep = config.GRIPPER_SLEEP
+        self.gripper_open = config.gripper_open
+        self.gripper_close = config.gripper_close
         self.topic_prefix = "realman" #config.ARM
         self.curr_joint = []
         self.curr_end_pos = np.full(7, 0.0, dtype=np.float32)
@@ -242,12 +244,13 @@ class AgilexEnv(gym.Env):
         end_pose.append(pose_rot.orientation.w)
         self.curr_end_pos = np.array(end_pose)
         # joint_angle = self.compute_ik(end_pose)
-        # print(f"arm {self.config.ARM} pos: {end_pose}\njoint_recv: {self.curr_joint} \njoint_com: {joint_angle}")
+        #print(f"pos: {end_pose}\n")
 
     def update_gripper_state(self, gripper_state):
         # print(f"get gripper val {gripper_state}")
-        factor = 13.3
-        self.curr_gripper_pos = [np.clip(gripper_state.data * factor, 0.0, 1.0)]
+        factor = 0.01
+        range = max(self.gripper_open - self.gripper_close, 1)
+        self.curr_gripper_pos = [np.clip((gripper_state.data - self.gripper_close)/range, 0.0, 1.0)]
 
     def img_callback(self, image, key):
         #ros_time = rospy.Time.now()
@@ -292,7 +295,7 @@ class AgilexEnv(gym.Env):
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
-        euler = Rotation.from_quat(pose[3:]).as_euler("zxy")
+        euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
         # print(
         #    Fore.RED
         #    + f" {self.rpy_bounding_box.low} "
@@ -307,16 +310,16 @@ class AgilexEnv(gym.Env):
         euler[0] = sign * (
             np.clip(
                 np.abs(euler[0]),
-                self.rpy_bounding_box.low[2],
-                self.rpy_bounding_box.high[2],
+                self.rpy_bounding_box.low[0],
+                self.rpy_bounding_box.high[0],
             )
         )
 
         euler[1:] = np.clip(
-            euler[1:], self.rpy_bounding_box.low[:2], self.rpy_bounding_box.high[:2]
+            euler[1:], self.rpy_bounding_box.low[1:], self.rpy_bounding_box.high[1:]
         )
         # print(f"cliped euler: {euler}")
-        pose[3:] = Rotation.from_euler("zxy", euler).as_quat()
+        pose[3:] = Rotation.from_euler("xyz", euler).as_quat()
 
         return pose
 
@@ -340,11 +343,11 @@ class AgilexEnv(gym.Env):
             ).as_quat()
 
             gripper_action = action[6] * self.action_scale[2]
-            # print(f"pos before clip: {self.nextpos}")
+            #print(f"pos before clip: {self.nextpos}")
             if self.control_arm:
                 self._send_gripper_command(gripper_action)
                 cliped_pos = self.clip_safety_box(self.nextpos)
-                # print(f"send step action: {cliped_pos}")
+                #print(f"send step action: {cliped_pos}")
                 self._send_pos_command(cliped_pos)
         except Exception as e:
             print(f"calculate action error {action}, exception {e}")
@@ -399,16 +402,13 @@ class AgilexEnv(gym.Env):
         implemented each subclass for the specific task.
         Should override this method if custom reset procedure is needed.
         """
+        self._send_gripper_command(1)
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
-            RESET_joint0 = [-0.0013] + self.curr_joint[1:6]
-            JOINT_RESET = [-0.0013, 0.0021, -0.0158, -0.0326, -0.00286, 0.00095]
-            self.send_joint_command(RESET_joint0)
-            time.sleep(0.1)
+            JOINT_RESET = [0,0,1.570,0,1.57,0]
             self.send_joint_command(JOINT_RESET)
-            self._send_gripper_command(1)
-            time.sleep(1.0)
+            time.sleep(1.5)
             return
 
         # Perform Carteasian reset
@@ -426,11 +426,12 @@ class AgilexEnv(gym.Env):
         else:
             reset_pose = self.resetpos.copy()
             self.interpolate_move(reset_pose, timeout=1)
+        time.sleep(1.0)
 
         # Change to compliance mode
         # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
 
-    def reset(self, joint_reset=True, **kwargs):
+    def reset(self, joint_reset=False, **kwargs):
         self.last_gripper_act = time.time()
         # TODO: update param
         # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
@@ -530,16 +531,18 @@ class AgilexEnv(gym.Env):
                 and (time.time() - self.last_gripper_act > self.gripper_sleep)
             ):  # close gripper
                 # specified for nong fu shan quan bottole
-                self.gripper_pub.publish(0.04)
+                self.gripper_pub.publish(self.gripper_close)
                 self.last_gripper_act = time.time()
             elif (
                 (pos >= 0.5)
                 and (self.curr_gripper_pos[0] < 0.85)
             ):  # open gripper
-                self.gripper_pub.publish(0.75)
+                self.gripper_pub.publish(self.gripper_open)
                 self.last_gripper_act = time.time()
             else:
                 return
+        else:
+            self.gripper_pub.publish(pos)
 
     def _update_curr_end_pos(self):
         """

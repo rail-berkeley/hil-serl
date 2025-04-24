@@ -11,7 +11,7 @@ class DefaultTrainingConfig:
     discount: float = 0.97
 
     max_steps: int = 1000000
-    replay_buffer_capacity: int = 20000
+    replay_buffer_capacity: int = 200000
 
     random_steps: int = 0
     training_starts: int = 100
@@ -19,6 +19,8 @@ class DefaultTrainingConfig:
 
     log_period: int = 10
     eval_period: int = 2000
+    gripper_open: int = 100
+    gripper_close: int = 20
 
     # "resnet" for ResNet10 from scratch and "resnet-pretrained" for frozen ResNet10 with pretrained weights
     encoder_type: str = "resnet-pretrained"
