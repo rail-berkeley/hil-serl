@@ -109,6 +109,7 @@ class JaxRLTrainState(struct.PyTreeNode):
     apply_fn: Callable = struct.field(pytree_node=False)
     params: Params
     target_params: Params
+    batch_stats: Params
     txs: Any = struct.field(pytree_node=False)
     opt_states: Any
     rng: PRNGKey

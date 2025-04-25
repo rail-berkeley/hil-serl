@@ -54,7 +54,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if train:
             assert rng is not None, "Must specify rng when training"
         return self.state.apply_fn(
-            {"params": grad_params or self.state.params},
+            {"params": grad_params or self.state.params, "batch_stats": self.state.batch_stats},
             observations,
             actions,
             name="critic",
@@ -91,7 +91,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if train:
             assert rng is not None, "Must specify rng when training"
         return self.state.apply_fn(
-            {"params": grad_params or self.state.params},
+            {"params": grad_params or self.state.params, "batch_stats": self.state.batch_stats},
             observations,
             name="grasp_critic",
             rngs={"dropout": rng} if train else {},
@@ -126,7 +126,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         if train:
             assert rng is not None, "Must specify rng when training"
         return self.state.apply_fn(
-            {"params": grad_params or self.state.params},
+            {"params": grad_params or self.state.params, "batch_stats": self.state.batch_stats},
             observations,
             name="actor",
             rngs={"dropout": rng} if train else {},
@@ -141,7 +141,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         Pass grad_params to use non-default parameters (e.g. for gradients).
         """
         return self.state.apply_fn(
-            {"params": grad_params or self.state.params}, name="temperature"
+            {"params": grad_params or self.state.params, "batch_stats": self.state.batch_stats}, name="temperature"
         )
 
     def temperature_lagrange_penalty(
@@ -152,7 +152,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         Pass grad_params to use non-default parameters (e.g. for gradients).
         """
         return self.state.apply_fn(
-            {"params": grad_params or self.state.params},
+            {"params": grad_params or self.state.params, "batch_stats": self.state.batch_stats},
             lhs=entropy,
             rhs=self.config["target_entropy"],
             name="temperature",
@@ -506,18 +506,21 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         rng, init_rng = jax.random.split(rng)
 
-        params = model_def.init(
+        init_state = model_def.init(
             init_rng,
             actor=[observations],
             critic=[observations, actions[..., :-1]],
             grasp_critic=[observations],
             temperature=[],
-        )["params"]
+        )
+        params = init_state["params"]
+        batch_stats = init_state["batch_stats"]
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(
             apply_fn=model_def.apply,
             params=params,
+            batch_stats=batch_stats,
             txs=txs,
             target_params=params,
             rng=create_rng,
@@ -579,6 +582,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         policy_network_kwargs["activate_final"] = True
         critic_network_kwargs["activate_final"] = True
+        use_deeper_net = False
 
         if encoder_type == "resnet":
             from serl_launcher.vision.resnet_v1 import resnetv1_configs
@@ -595,13 +599,24 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         elif encoder_type == "resnet-pretrained":
             from serl_launcher.vision.resnet_v1 import (
                 PreTrainedResNetEncoder,
-                resnetv1_configs,
             )
+            if use_deeper_net:
+                from serl_launcher.vision.resnet_torch import (
+                    resnetv1_configs
+                )
+                pretrained_encoder = resnetv1_configs["resnetv1-34"](
+                    pre_pooling=True,
+                    name="pretrained_encoder",
+                )
+            else:
+                from serl_launcher.vision.resnet_v1 import (
+                    resnetv1_configs
+                )
+                pretrained_encoder = resnetv1_configs["resnetv1-10-frozen"](
+                    pre_pooling=True,
+                    name="pretrained_encoder",
+                )
 
-            pretrained_encoder = resnetv1_configs["resnetv1-10-frozen"](
-                pre_pooling=True,
-                name="pretrained_encoder",
-            )
             encoders = {
                 image_key: PreTrainedResNetEncoder(
                     pooling_method="spatial_learned_embeddings",
@@ -673,8 +688,11 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         )
 
         if "pretrained" in encoder_type:  # load pretrained weights for ResNet-10
-            from serl_launcher.utils.train_utils import load_resnet10_params
-
-            agent = load_resnet10_params(agent, image_keys)
+            if use_deeper_net:
+                from serl_launcher.utils.train_utils import load_resnet_torch_params
+                agent = load_resnet_torch_params(agent, image_keys)
+            else:
+                from serl_launcher.utils.train_utils import load_resnet10_params
+                agent = load_resnet10_params(agent, image_keys)
 
         return agent

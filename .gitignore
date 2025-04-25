@@ -12,3 +12,7 @@ serl_robot_infra/franka_env/envs/__pycache__
 serl_robot_infra/franka_env/spacemouse/__pycache__
 serl_robot_infra/realman_env/__pycache__
 franka_sim/franka_sim/.DS_Store    
+examples/experiments/*/first_run*/
+examples/experiments/*/demo_data*/
+examples/experiments/*/wandb/
+examples/experiments/*/__pycache__/
