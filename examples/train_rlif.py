@@ -265,6 +265,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 post_int_obs = next_obs
 
                 if not already_intervened:
+                    print_cyan("Started intervention.")
                     intervention_count += 1
 
                     pre_int_obs = obs
@@ -293,6 +294,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 already_intervened = True
             else:
                 if already_intervened:
+                    print_cyan(f"Ended intervention of {this_intervention['t1'] - this_intervention['t0']} steps.")
                     if this_intervention is None:
                         print("Error: Should not be None")
                     interventions.append(this_intervention)
@@ -664,6 +666,7 @@ def main(_):
             encoder_type=config.encoder_type,
             discount=config.discount,
             enable_cl=enable_cl,
+            soft_cl = FLAGS.method == "soft_cl",
             intervene_steps=intervene_steps,
             constraint_eps=constraint_eps,
         )
