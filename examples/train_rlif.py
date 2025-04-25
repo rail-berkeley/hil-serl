@@ -319,7 +319,10 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                             rewards=FLAGS.optimism,
                             masks=FLAGS.optimism_done_mask, # Used in training, denoting whether or not we're at the end of a trajectory.
                             dones=done, # Not actually used in training.
+                            info=info | {'optimism': True},
                         )
+                        data_store.insert(transition)
+                        transitions.append(copy.deepcopy(transition))
                 already_intervened = False
 
             if (done or truncated) and this_intervention is not None:
@@ -343,6 +346,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 rewards=reward,
                 masks=1.0 - done,
                 dones=done,
+                info=info,
             )
             # if checkpoint_key:
             #     breakpoint()
