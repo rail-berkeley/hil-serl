@@ -1,2 +1,6 @@
 __pycache__/
 *.py[cod]
+
+examples/experiments/**/debug_*/
+examples/experiments/**/*.pkl
+examples/experiments/**/checkpoint_*
