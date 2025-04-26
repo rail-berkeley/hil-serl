@@ -129,6 +129,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
             ### receive signal from learner and then reset
             obs, _ = env.reset()
             time.sleep(7.0)
+            obs, _ = env.reset()
             print("reset end")
             done = False
             start_time = time.time()
@@ -204,6 +205,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
     print("reset start")
     obs, _ = env.reset()
     time.sleep(5.0)
+    obs, _ = env.reset()
     print("reset end")
     done = False
 
@@ -319,10 +321,11 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                             rewards=FLAGS.optimism,
                             masks=FLAGS.optimism_done_mask, # Used in training, denoting whether or not we're at the end of a trajectory.
                             dones=done, # Not actually used in training.
-                            info=info | {'optimism': True},
                         )
+                        if 'grasp_penalty' in info:
+                            transition['grasp_penalty'] = 0
                         data_store.insert(transition)
-                        transitions.append(copy.deepcopy(transition))
+                        transitions.append(copy.deepcopy(transition) | {'info': info | {'optimism': True}})
                 already_intervened = False
 
             if (done or truncated) and this_intervention is not None:
@@ -346,17 +349,16 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 rewards=reward,
                 masks=1.0 - done,
                 dones=done,
-                info=info,
             )
             # if checkpoint_key:
             #     breakpoint()
             if 'grasp_penalty' in info:
                 transition['grasp_penalty']= info['grasp_penalty']
             data_store.insert(transition)
-            transitions.append(copy.deepcopy(transition))
+            transitions.append(copy.deepcopy(transition) | {'info': info})
             if already_intervened:
                 intvn_data_store.insert(transition)
-                demo_transitions.append(copy.deepcopy(transition))
+                demo_transitions.append(copy.deepcopy(transition) | {'info': info})
 
             obs = next_obs
             if done or truncated:
@@ -391,6 +393,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 demo_transitions_full_trajs = demo_transitions
                 # input("Waiting for input to proceed...")
                 time.sleep(7.0)
+                obs, _ = env.reset()
                 print("reset end")
                 from_time = time.time()
 

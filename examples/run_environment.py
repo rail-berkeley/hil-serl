@@ -16,6 +16,7 @@ def main(_):
         obs, info = env.reset()
         print("reset start")
         time.sleep(5.0)
+        obs, info = env.reset()
         print("reset end")
 
         done = False
