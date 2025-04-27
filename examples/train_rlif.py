@@ -319,8 +319,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                             actions=actions,
                             next_observations=next_obs,
                             rewards=FLAGS.optimism,
-                            masks=FLAGS.optimism_done_mask, # Used in training, denoting whether or not we're at the end of a trajectory.
-                            dones=done, # Not actually used in training.
+                            masks=1.0 - FLAGS.optimism_done_mask, # Used in training, denoting whether or not we're at the end of a trajectory.
+                            dones=FLAGS.optimism_done_mask, # Not actually used in training.
                         )
                         if 'grasp_penalty' in info:
                             transition['grasp_penalty'] = 0
