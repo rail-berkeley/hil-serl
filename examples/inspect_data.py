@@ -7,7 +7,14 @@ import imageio
 import cv2
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("folder", None, "Path to folder (either /buffer/, /demo_buffer/, /preference_buffer/, or /interventions/)")
+
+
+def _get_folder():
+    print()
+    print("Please provide a folder that's either a /buffer/, /demo_buffer/, /preference_buffer/, or /interventions/.")
+    folder = input(" ")
+    print(folder)
+    return folder
 
 
 def _save_video(frames: np.ndarray, default_path: str):
@@ -173,7 +180,8 @@ def inspect_classifier_data(path: str):
 
 
 def main(_):
-    path = os.path.normpath(FLAGS.folder)
+    folder = _get_folder()
+    path = os.path.normpath(folder)
     folder_name = os.path.basename(path)
     if folder_name == "buffer":
         inspect_buffer(path)
