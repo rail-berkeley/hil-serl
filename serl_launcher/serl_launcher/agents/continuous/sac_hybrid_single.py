@@ -314,6 +314,15 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                     state_loss += margin_loss
                 critic_loss += state_loss
 
+                a_pi = pref_batch['a_pi']
+                a_ex = pref_batch['a_exp']
+                
+                o_pre_a_pi_qf = self.forward_critic(o_pre, a_pi, rng=state_key, grad_params=params)
+                o_pre_a_ex_qf = self.forward_critic(o_pre, a_ex, rng=post_key, grad_params=params)
+                action_loss = reward_coeff * (o_pre_a_pi_qf - o_pre_a_ex_qf)
+                action_loss = jnp.where(action_loss < 0, 0.0, action_loss).mean()
+                critic_loss += action_loss
+                
                 info = info | {
                     "state_loss": state_loss,
                     "constraint_coeff": constraint_coeff,
