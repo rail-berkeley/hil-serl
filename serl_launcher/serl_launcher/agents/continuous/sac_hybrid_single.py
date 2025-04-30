@@ -302,8 +302,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 constraint_coeff = self.config["cl"]["constraint_coeff"]
                 reward_coeff = self.config["cl"]["reward_coeff"]
 
-                state_loss = reward_coeff * (constraint_coeff * o_pre_qf - o_post_qf)
+                coeff = jnp.power(self.config['discount'], pref_batch["t"])
+                # pre_intervention_value = self.forward_critic(o_pre, a_pre, rng=state_key, grad_params=params)
+                # post_intervention_value = self.forward_critic(o_post, a_post, rng=post_key, grad_params=params)
+                
+                state_loss = reward_coeff * (o_pre_qf - o_post_qf)
                 state_loss = jnp.where(state_loss < 0, 0.0, state_loss).mean()
+                if constraint_coeff != 1.0:
+                    margin_loss = reward_coeff * (jnp.multiply(coeff, o_post_qf) - o_pre_qf)
+                    margin_loss = jnp.where(margin_loss < 0, 0.0, margin_loss).mean()
+                    state_loss += margin_loss
                 critic_loss += state_loss
 
                 info = info | {

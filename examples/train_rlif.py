@@ -309,6 +309,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                             post_obs=post_int_obs,
                             a_pi=a_int_pi,
                             a_exp=a_int_exp,
+                            t=np.array([this_intervention['t1'] - this_intervention['t0']]),
                         )
                         pref_data_store.insert(pref_datapoint)
                         preference_datas.append(pref_datapoint)
@@ -338,6 +339,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                         post_obs=post_int_obs,
                         a_pi=a_int_pi,
                         a_exp=a_int_exp,
+                        t=np.array([this_intervention['t1'] - this_intervention['t0']]),
                     )
                     pref_data_store.insert(pref_datapoint)
                     this_intervention = None
