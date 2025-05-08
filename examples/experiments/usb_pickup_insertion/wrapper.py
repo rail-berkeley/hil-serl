@@ -102,7 +102,7 @@ class USBEnv(FrankaEnv):
 class GripperPenaltyWrapper(gym.Wrapper):
     def __init__(self, env, penalty=-0.05):
         super().__init__(env)
-        assert env.action_space.shape == (7,)
+        assert env.action_space.shape == (7,), f"{env.action_space.shape}"
         self.penalty = penalty
         self.last_gripper_pos = None
 

@@ -52,7 +52,7 @@ class Critic(nn.Module):
         self, observations: jnp.ndarray, actions: jnp.ndarray, train: bool = False
     ) -> jnp.ndarray:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations)
 
@@ -81,7 +81,7 @@ class GraspCritic(nn.Module):
         train: bool = False
     ) -> jnp.ndarray:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations)
         
@@ -110,8 +110,8 @@ class AlphaNetwork(nn.Module):
         train: bool = False
     ) -> jnp.ndarray:
         if self.encoder is None:
-            o_pre_enc = o_pre
-            o_post_enc = o_post
+            o_pre_enc = o_pre['state']
+            o_post_enc = o_post['state']
         else:
             o_pre_enc = self.encoder(o_pre)
             o_post_enc = self.encoder(o_post)
@@ -162,7 +162,7 @@ class Policy(nn.Module):
         self, observations: jnp.ndarray, temperature: float = 1.0, train: bool = False, non_squash_distribution: bool = False,
     ) -> distrax.Distribution:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations, train=train, stop_gradient=True)
 

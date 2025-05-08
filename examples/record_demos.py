@@ -18,7 +18,7 @@ flags.DEFINE_integer("successes_needed", 20, "Number of successful demos to coll
 def main(_):
     assert FLAGS.exp_name in CONFIG_MAPPING, 'Experiment folder not found.'
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    env = config.get_environment(fake_env=False, save_video=False, classifier=True)
+    env = config.get_environment(fake_env=False, save_video=False, classifier=True, state_based=True)
     if not os.path.exists("./demo_data"):
         os.makedirs("./demo_data")
     uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -73,7 +73,7 @@ def main(_):
             dump_data(transitions)
             print(f"{cs} steps in {time.time() - t0}s")
             print("reset start")
-            time.sleep(5.0)
+            time.sleep(1.0)
             cs = 0
             t0 = time.time()
             print("reset end")

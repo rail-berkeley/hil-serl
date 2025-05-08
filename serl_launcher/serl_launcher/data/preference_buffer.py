@@ -18,6 +18,7 @@ class PreferenceBuffer(Dataset):
             post_obs=post_obs_data,
             a_pi=np.empty((capacity, *a_pi_space.shape), dtype=a_pi_space.dtype),
             a_exp=np.empty((capacity, *a_exp_space.shape), dtype=a_exp_space.dtype),
+            t=np.empty((capacity,), dtype=np.float32)
         )
 
         super().__init__(dataset_dict)

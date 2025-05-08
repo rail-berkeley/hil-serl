@@ -4,3 +4,88 @@ __pycache__/
 examples/experiments/**/debug_*/
 examples/experiments/**/*.pkl
 examples/experiments/**/checkpoint_*
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+build/
+sdist/
+*.egg-info/
+*.whl
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+*.env
+
+# PyInstaller
+#  Usually these files are written by a python script; excluding them is not always
+#  appropriate.
+#  https://docs.pyinstaller.org/en/stable/when-things-go-wrong.html
+# _MEIPASS*
+# _MEI*
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.log
+*.rpt
+*.db
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.sqlite3
+*.sqlitedb
+local_settings.py
+/static/
+/media/
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx stuff:
+docs/_build
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# mkdocs
+site/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.sock
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+demo_data/
+
+examples/experiments/**/debug_*/
+examples/experiments/**/*.pkl
+examples/experiments/**/checkpoint_*
+**/*.out
