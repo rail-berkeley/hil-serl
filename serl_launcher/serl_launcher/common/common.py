@@ -141,6 +141,14 @@ class JaxRLTrainState(struct.PyTreeNode):
         `self.txs` as a tree prefix (i.e. where `self.txs` has a leaf, `grads`
         has a subtree with the same structure as `self.params`.)
         """
+        #print(jax.tree_structure(self.params))
+        #print(jax.tree_structure(grads))
+
+        # 比较键的差异
+        #expected_keys = set([...])  # 从错误信息中复制expected keys
+        #actual_keys = set(your_params_dict.keys())
+        #print("Missing keys:", expected_keys - actual_keys)
+        #print("Extra keys:", actual_keys - expected_keys)
         updates_and_new_states = self._tx_tree_map(
             lambda tx, opt_state, grad: tx.update(grad, opt_state, self.params),
             self.txs,
@@ -224,7 +232,7 @@ class JaxRLTrainState(struct.PyTreeNode):
 
     @classmethod
     def create(
-        cls, *, apply_fn, params, txs, target_params=None, rng=jax.random.PRNGKey(0), epsilon=0.0
+        cls, *, apply_fn, params, batch_stats, txs, target_params=None, rng=jax.random.PRNGKey(0), epsilon=0.0
     ):
         """
         Initializes a new train state.
@@ -240,6 +248,7 @@ class JaxRLTrainState(struct.PyTreeNode):
             step=0,
             apply_fn=apply_fn,
             params=params,
+            batch_stats=batch_stats,
             target_params=target_params,
             txs=txs,
             opt_states=cls._tx_tree_map(lambda tx: tx.init(params), txs),

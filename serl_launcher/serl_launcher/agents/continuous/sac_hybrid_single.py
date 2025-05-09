@@ -7,6 +7,7 @@ import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
+from jax import tree_util as jtu
 
 from serl_launcher.common.common import JaxRLTrainState, ModuleDict, nonpytree_field
 from serl_launcher.common.encoding import EncodingWrapper
@@ -514,8 +515,16 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             temperature=[],
         )
         params = init_state["params"]
-        batch_stats = init_state["batch_stats"]
+        if "batch_stats" in init_state:
+            batch_stats = init_state["batch_stats"]
+        else:
+            batch_stats = {}
+        #print(f"batch: {batch_stats}")
 
+        #shapes = jtu.tree_map(lambda x: x.shape, params)
+        #print(f"param shape: {shapes}")
+        #batch_shapes = jtu.tree_map(lambda x: x.shape, batch_stats)
+        #print(f"param shape: {batch_shapes}")
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(
             apply_fn=model_def.apply,

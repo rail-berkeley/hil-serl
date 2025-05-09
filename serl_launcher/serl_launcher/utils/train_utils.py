@@ -13,6 +13,8 @@ import tensorflow as tf
 import wandb
 from flax.core import frozen_dict
 from flax.training import checkpoints
+from jax import tree_util as jtu
+
 
 def ask_for_frame(images_dict):
     # Create a new figure
@@ -187,87 +189,96 @@ def load_resnet_torch_params(agent, image_keys=("image",), public=True):
         new_encoder_params = new_params["modules_actor"]["encoder"][
             f"encoder_{image_key}"
         ]
-        if f"encoder_"{image_key} in new_stats["modules_actor"]["encoder"]:
+        if f"encoder_{image_key}" in new_stats["modules_actor"]["encoder"]:
             new_encoder_stats = new_stats["modules_actor"]["encoder"][
                 f"encoder_{image_key}"
             ]
         else:
-            new_encoder_stats = None
-        if "pretrained_encoder" in new_encoder_params and "pretrained_encoder" in new_encoder_stats:
+            pass
+        new_encoder_stats = None
+        if "pretrained_encoder" in new_encoder_params:
             new_encoder_params = new_encoder_params["pretrained_encoder"]
-            if new_encoder_stats not None:
+            if new_encoder_stats is not None and "pretrained_encoder" in new_encoder_stats:
                 new_encoder_stats = new_encoder_stats["pretrained_encoder"]
             # 转换初始卷积层
+            else:
+                new_encoder_stats = None
             new_encoder_params['Conv2d_0'] = {
                 'kernel': np.transpose(pytorch_state_dict['conv1.weight'].numpy(), (2, 3, 1, 0)),
-                'bias': None  # PyTorch的conv1没有bias
+                #'bias': None  # PyTorch的conv1没有bias
             }
 
             # 转换初始BatchNorm层
-            new_encoder_params['BatchNorm2d_0'] = {
+            new_encoder_params['BatchNorm2d_0']['BatchNorm_0'] = {
                 'scale': pytorch_state_dict['bn1.weight'].numpy(),
                 'bias': pytorch_state_dict['bn1.bias'].numpy(),
             }
-            if new_encoder_stats not None:
-                new_encoder_stats['BatchNorm2d_0'] = {
+            if new_encoder_stats is not None:
+                #print(f"new stats: {new_encoder_stats}")
+                new_encoder_stats['BatchNorm2d_0']['BatchNorm_0'] = {
                     'mean': pytorch_state_dict['bn1.running_mean'].numpy(),
                     'var': pytorch_state_dict['bn1.running_var'].numpy(),
                 }
 
-            # 转换残差块层
-            layer_names = ['layer1', 'layer2', 'layer3', 'layer4']
-            layer_len = [3, 4, 6, 3]
-            for i, layer_name in enumerate(layer_names):
-                for j in range(layer_len[i]):
-                    block_name = f'Sequential_{i}_{j}'
-                    pytorch_block = getattr(pytorch_model, layer_name)[j]
 
-                    # 转换下采样层（如果有）
-                    if pytorch_block.downsample is not None:
-                        downsample_name = f'{block_name}_downsample_0'
-                        with torch.no_grad():
-                            new_encoder_params[f'{downsample_name}'] = {
-                                'kernel': np.transpose(pytorch_block.downsample[0].weight.numpy(), (2, 3, 1, 0)),
-                                'bias': None
+            with torch.no_grad():
+                # 转换残差块层
+                layer_names = ['layer1', 'layer2', 'layer3', 'layer4']
+                layer_len = [3, 4, 6, 3]
+                block_count = 0
+                for i, layer_name in enumerate(layer_names):
+                    pytorch_layer_block = getattr(pytorch_model, layer_name)
+                    if i != 0:
+                        #print(f"pytorch block: {pytorch_layer_block}")
+                        new_encoder_params[f'Conv2d_{i}'] = {
+                            'kernel': np.transpose(pytorch_layer_block[0].downsample[0].weight.numpy(), (2, 3, 1, 0)),
+                            #'bias': None
+                        }
+                        new_encoder_params[f'BatchNorm2d_{i}']['BatchNorm_0'] = {
+                            'scale': pytorch_layer_block[0].downsample[1].weight.numpy(),
+                            'bias': pytorch_layer_block[0].downsample[1].bias.numpy(),
+                        }
+                        if new_encoder_stats is not None:
+                            new_encoder_stats[f'BatchNorm2d_{i}']['BatchNorm_0'] = {
+                                'mean': pytorch_layer_block[0].downsample[1].running_mean.numpy(),
+                                'var': pytorch_layer_block[0].downsample[1].running_var.numpy(),
                             }
-                            new_encoder_params[f'{downsample_name}_BatchNorm2d_0'] = {
-                                'scale': pytorch_block.downsample[1].weight.numpy(),
-                                'bias': pytorch_block.downsample[1].bias.numpy(),
+                    block_count += 1
+                    for j in range(layer_len[i]):
+                        block_name = f'BasicBlock_{block_count}'
+                        pytorch_block = pytorch_layer_block[j]
+
+                        for k, conv_name in enumerate(['conv1', 'conv2']):
+                            flax_conv_name = f'Conv2d_{k}'
+                            pytorch_conv = getattr(pytorch_block, conv_name)
+                            new_encoder_params[block_name][flax_conv_name] = {
+                                'kernel': np.transpose(pytorch_conv.weight.numpy(), (2, 3, 1, 0)),
+                                #'bias': None
                             }
-                            if new_encoder_stats not None:
-                                new_encoder_stats[f'{downsample_name}_BatchNorm2d_0'] = {
-                                    'mean': pytorch_block.downsample[1].running_mean.numpy(),
-                                    'var': pytorch_block.downsample[1].running_var.numpy(),
+
+                        # 转换BatchNorm层
+                        for k, bn_name in enumerate(['bn1', 'bn2']):
+                            flax_bn_name = f'BatchNorm2d_{k}'
+                            pytorch_bn = getattr(pytorch_block, bn_name)
+                            new_encoder_params[block_name][flax_bn_name]['BatchNorm_0'] = {
+                                'scale': pytorch_bn.weight.numpy(),
+                                'bias': pytorch_bn.bias.numpy(),
+                            }
+                            if new_encoder_stats is not None:
+                                new_encoder_stats[flax_bn_name] = {
+                                    'mean': pytorch_bn.running_mean.numpy(),
+                                    'var': pytorch_bn.running_var.numpy(),
                                 }
+                        block_count += 1
 
-                            # 转换卷积层
-                            for k, conv_name in enumerate(['conv1', 'conv2']):
-                                flax_conv_name = f'{block_name}_{k*2}'
-                                pytorch_conv = getattr(pytorch_block, conv_name)
-                                new_encoder_params[flax_conv_name] = {
-                                    'kernel': np.transpose(pytorch_conv.weight.numpy(), (2, 3, 1, 0)),
-                                    'bias': None
-                                }
+                ## 转换最后的全连接层
+                #new_encoder_params['Dense_0'] = {
+                #    'kernel': np.transpose(pytorch_state_dict['fc.weight'].numpy(), (1, 0)),
+                #    'bias': pytorch_state_dict['fc.bias'].numpy()
+                #}
 
-                                # 转换BatchNorm层
-                                for k, bn_name in enumerate(['bn1', 'bn2']):
-                                    flax_bn_name = f'{block_name}_{k*2+1}'
-                                    pytorch_bn = getattr(pytorch_block, bn_name)
-                                    new_encoder_params[flax_bn_name] = {
-                                        'scale': pytorch_bn.weight.numpy(),
-                                        'bias': pytorch_bn.bias.numpy(),
-                                    }
-                                    if new_encoder_stats not None:
-                                        new_encoder_stats[flax_bn_name] = {
-                                            'mean': pytorch_bn.running_mean.numpy(),
-                                            'var': pytorch_bn.running_var.numpy(),
-                                        }
-
-                                    # 转换最后的全连接层
-                                    new_encoder_params['Dense_0'] = {
-                                        'kernel': np.transpose(pytorch_state_dict['fc.weight'].numpy(), (1, 0)),
-                                        'bias': pytorch_state_dict['fc.bias'].numpy()
-                                    }
+    shapes = jtu.tree_map(lambda x: x.shape, new_params)
+    #print(f"updated shapes: {shapes}")
 
     agent = agent.replace(state=agent.state.replace(params=new_params))
     return agent
