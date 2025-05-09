@@ -22,7 +22,7 @@ from franka_env.envs.wrappers import Quat2EulerWrapper
 
 
 class RightEnvConfig(DefaultEnvConfig):
-    ARM = "right"
+    ARM = "dobot"
     CAMERAS = {
         "wrist": "/camera_r/color/image_raw",
         #"front": "/camera_f/color/image_raw",

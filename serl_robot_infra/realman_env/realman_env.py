@@ -108,7 +108,7 @@ class AgilexEnv(gym.Env):
         self.gripper_sleep = config.GRIPPER_SLEEP
         self.gripper_open = config.gripper_open
         self.gripper_close = config.gripper_close
-        self.topic_prefix = "realman" #config.ARM
+        self.topic_prefix =  config.ARM
         self.curr_joint = []
         self.curr_end_pos = np.full(7, 0.0, dtype=np.float32)
         self.curr_end_pos[6] = 1.0
@@ -176,6 +176,7 @@ class AgilexEnv(gym.Env):
         self.cycle_count = 0
         if not fake_env:
             self.img_queue = queue.Queue(maxsize=1)
+            self.dis_images = {}
             if self.display_image:
                 self.displayer = ImageDisplayer(self.img_queue, "visualizer")
                 self.displayer.start()
@@ -200,7 +201,7 @@ class AgilexEnv(gym.Env):
         if rospy.get_node_uri():
             print("Node has been initialzed already")
         else:
-            rospy.init_node(f"hilserl_realman_env", anonymous=True)
+            rospy.init_node(f"hilserl_robot_env", anonymous=True)
         self.joint_sub = rospy.Subscriber(
             self.topic_prefix + "/joint_states", JointState, self.update_curr_joint
         )
@@ -266,15 +267,15 @@ class AgilexEnv(gym.Env):
             cropped_rgb, self.observation_space["images"][key].shape[:2][::-1]
         )
         self.wrist_img[key] = resized
-        display_image = {}
-        if self.display_image and key == "wrist":
-            display_image[key] =resized #{"img": resized, "id": self.display_img_id}
+        if self.display_image and (key == "wrist" or key == "side"):
+            self.dis_images[key] =resized #{"img": resized, "id": self.display_img_id}
             if not self.img_queue.empty():
                 try:
                     self.img_queue.get_nowait()
                 except queue.Empty:
                     pass
-            self.img_queue.put(display_image)
+            if (len(self.dis_images) == 2):
+                self.img_queue.put(self.dis_images)
         # if key not in self.wrist_img:
         #    self.wrist_img[key] = [cv_image]
         # else:
