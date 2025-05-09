@@ -280,5 +280,5 @@ def load_resnet_torch_params(agent, image_keys=("image",), public=True):
     shapes = jtu.tree_map(lambda x: x.shape, new_params)
     #print(f"updated shapes: {shapes}")
 
-    agent = agent.replace(state=agent.state.replace(params=new_params))
+    agent = agent.replace(state=agent.state.replace(params=new_params, batch_stats=new_stats))
     return agent
