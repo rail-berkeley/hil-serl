@@ -267,7 +267,7 @@ class AgilexEnv(gym.Env):
         )
         self.wrist_img[key] = resized
         display_image = {}
-        if self.display_image and key == "side":
+        if self.display_image and key == "wrist":
             display_image[key] =resized #{"img": resized, "id": self.display_img_id}
             if not self.img_queue.empty():
                 try:

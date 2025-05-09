@@ -15,6 +15,8 @@ from experiments.move_cup_realman.config import TrainConfig as MoveCupRealmanTra
 from experiments.lift_cup.config import TrainConfig as LiftCupTrainConfig
 from experiments.place_power_bank.config import TrainConfig as PlacePowerBankTrainConfig
 from experiments.pick_pen.config import TrainConfig as PickPenTrainConfig
+from experiments.insert_battery.config import TrainConfig as InsertBatteryTrainConfig
+from experiments.insert_powerbank.config import TrainConfig as InsertPowerbankTrainConfig
 
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
@@ -27,6 +29,8 @@ CONFIG_MAPPING = {
     "move_cup": MoveCupRealmanTrainConfig,
     "lift_cup": LiftCupTrainConfig,
     "place_power_bank": PlacePowerBankTrainConfig,
-    "pick_pen": PickPenTrainConfig
+    "pick_pen": PickPenTrainConfig,
+    "insert_battery": InsertBatteryTrainConfig,
+    "insert_powerbank": InsertPowerbankTrainConfig
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }
