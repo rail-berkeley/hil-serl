@@ -9,8 +9,14 @@ import tqdm
 from absl import app, flags
 from flax.training import checkpoints
 import os
+import sys
+import signal
 import copy
 import pickle as pkl
+import threading
+from pynput import keyboard
+from colorama import Fore, Style
+
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
 
@@ -81,6 +87,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     """
     This is the actor loop, which runs when "--actor" is set to True.
     """
+    global gl_stop_state
     if FLAGS.eval_checkpoint_step:
         success_counter = 0
         time_list = []
@@ -94,6 +101,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         agent = agent.replace(state=ckpt)
 
         for episode in range(FLAGS.eval_n_trajs):
+            while gl_stop_state.value:
+                time.sleep(0.5)
             obs, _ = env.reset()
             done = False
             start_time = time.time()
@@ -173,8 +182,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
         range(start_step, config.max_steps), desc="Actor step", dynamic_ncols=True
     )
     for step in pbar:
+        while gl_stop_state.value:
+            time.sleep(0.5)
         timer.tick("total")
-
         with timer.context("sample_actions"):
             if step < config.random_steps:
                 actions = env.action_space.sample()
@@ -347,11 +357,14 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             {"critic", "grasp_critic", "actor", "temperature"}
         )
     print_green(f"buffer size before step {len(replay_buffer)}")
+    global gl_stop_state
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
         # run n-1 critic updates and 1 critic + actor update.
         # This makes training on GPU faster by reducing the large batch transfer time from CPU to GPU
+        while gl_stop_state.value and gl_stop_learner:
+            time.sleep(0.5)
         for critic_step in range(config.cta_ratio - 1):
             with timer.context("sample_replay_buffer"):
                 batch = next(replay_iterator)
@@ -397,8 +410,82 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
 
 ##############################################################################
 
+import posix_ipc
+import mmap
+import ctypes
+
+# 定义共享内存和信号量名称（需唯一）
+SHM_NAME = "/shared_state"
+SEM_NAME = "/pause_state"
+
+def init_shared_state():
+    """初始化共享内存和信号量"""
+    # 创建共享内存（存储一个布尔值）
+    shm = posix_ipc.SharedMemory(SHM_NAME, flags=posix_ipc.O_CREAT, size=ctypes.sizeof(ctypes.c_bool))
+    # 映射共享内存
+    shared_data = mmap.mmap(shm.fd, shm.size)
+    os.close(shm.fd)  # 关闭文件描述符，mmap仍有效
+
+    # 初始化信号量（初始值为1，表示未锁定）
+    sem = posix_ipc.Semaphore(SEM_NAME, flags=posix_ipc.O_CREAT, initial_value=1)
+    return shared_data, sem
+
+def cleanup_shared_state(shared_data, sem):
+    """清理资源"""
+    try:
+        # 尝试关闭资源
+        shared_data.close()
+        sem.close()
+    finally:
+        try:
+            posix_ipc.unlink_shared_memory(SHM_NAME)
+            posix_ipc.unlink_semaphore(SEM_NAME)
+        except posix_ipc.ExistentialError:
+            pass  # 忽略已释放的错误
+
+gl_stop_state = None
+gl_sem = None
+gl_stop_learner = True
+gl_listener_thread = None
+def start_key_listen_thread():
+    global gl_stop_state, gl_sem, gl_listener_thread
+    def on_press(key):
+        global gl_stop_state, gl_sem
+        try:
+            if key == keyboard.Key.space:
+                gl_sem.acquire()
+                if gl_stop_state.value:
+                    print(Fore.GREEN + "Resume training" + Style.RESET_ALL)
+                    gl_stop_state.value = False
+                else:
+                    print(Fore.RED + "Stop training" + Style.RESET_ALL)
+                    gl_stop_state.value = True
+                gl_sem.release()
+        except AttributeError:
+            pass
+
+    def start_keyboard_listener():
+        with keyboard.Listener(on_press=on_press) as listener:
+            listener.join()
+
+    gl_listener_thread = threading.Thread(
+        target=start_keyboard_listener, daemon=True
+    )
+    gl_listener_thread.start()
+
+
+def handler(sig, frame):
+    global gl_stop_state, gl_sem, shared_data
+    gl_stop_state = False
+    cleanup_shared_state(shared_data, gl_sem)
+    sys.exit(0)
 
 def main(_):
+    signal.signal(signal.SIGINT, handler)
+    global gl_stop_state, gl_sem, shared_data
+    shared_data, gl_sem = init_shared_state()
+    gl_stop_state = ctypes.c_bool.from_buffer(shared_data)
+
     global config
     config = CONFIG_MAPPING[FLAGS.exp_name]()
 
@@ -417,7 +504,7 @@ def main(_):
     print(f"env observe space {env.observation_space}")
     print(f"env action space {env.action_space}")
     rng, sampling_rng = jax.random.split(rng)
-
+    
     if (
         config.setup_mode == "single-arm-fixed-gripper"
         or config.setup_mode == "dual-arm-fixed-gripper"
@@ -557,6 +644,7 @@ def main(_):
 
         # actor loop
         print_green("starting actor loop")
+        start_key_listen_thread()
         actor(
             agent,
             data_store,
