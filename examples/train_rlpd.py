@@ -354,31 +354,28 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         # This makes training on GPU faster by reducing the large batch transfer time from CPU to GPU
         for critic_step in range(config.cta_ratio - 1):
             with timer.context("sample_replay_buffer"):
-                print_green(f"critic step buffer size {len(replay_buffer)}")
                 batch = next(replay_iterator)
-                print(f"batach size {len(batch)}")
                 demo_batch = next(demo_iterator)
                 batch = concat_batches(batch, demo_batch, axis=0)
 
             with timer.context("train_critics"):
+                #print("before update critic")
                 agent, critics_info = agent.update(
                     batch,
                     networks_to_update=train_critic_networks_to_update,
                 )
+                #print("after update critic")
 
         with timer.context("train"):
-            print_green(f"agent update buffer size {len(replay_buffer)}")
             batch = next(replay_iterator)
-            print("get batch")
             demo_batch = next(demo_iterator)
             batch = concat_batches(batch, demo_batch, axis=0)
-            print("before update")
+            #print("before update actor")
             agent, update_info = agent.update(
                 batch,
                 networks_to_update=train_networks_to_update,
             )
-            print("after update")
-        print_green(f"after agent update buffer size {len(replay_buffer)}")
+            #print("after update actor")
         # publish the updated network
         if step > 0 and step % (config.steps_per_update) == 0:
             agent = jax.block_until_ready(agent)

@@ -384,7 +384,6 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
             and self.config["augmentation_function"] is not None
         ):
             batch = self.config["augmentation_function"](batch, aug_rng)
-
         batch = batch.copy(
             add_or_replace={"rewards": batch["rewards"] + self.config["reward_bias"]}
         )
