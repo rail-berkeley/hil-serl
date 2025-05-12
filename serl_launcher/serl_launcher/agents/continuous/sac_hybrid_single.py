@@ -589,6 +589,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 "bc_loss": bc_loss,
                 "bc_grasp_loss": bc_grasp_loss,
                 "bc_loss_total": bc_loss + bc_grasp_loss,
+                "bc_coeff": self.bc_coeff,
             }
 
         return actor_loss, info
@@ -799,6 +800,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         info = {
             "bc_loss": bc_loss,
+            "bc_coeff": self.bc_coeff,
         }
 
         beta = 0.1
