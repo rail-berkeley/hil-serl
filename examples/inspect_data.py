@@ -24,13 +24,13 @@ def _save_video(frames: np.ndarray, default_path: str):
     if output_path == "":
         output_path = f"{default_path}"
     output_path = os.path.abspath(output_path)
-    print(output_path)
     assert os.path.exists(os.path.dirname(output_path))
     if os.path.exists(output_path):
         print()
         yn = input("Will override previous video. Proceed? [y/n] [n] ")
         if yn != 'y':
             return
+    print(output_path)
     print()
     imageio.mimsave(
         uri=output_path,
@@ -41,11 +41,14 @@ def _save_video(frames: np.ndarray, default_path: str):
 
 
 def inspect_buffer(path: str):
-    files = [os.path.join(path, fp) for fp in os.listdir(path) if os.path.isfile(os.path.join(path, fp))]
+    if os.path.isfile(path):
+        files = [path]
+    else:
+        files = [os.path.join(path, fp) for fp in os.listdir(path) if os.path.isfile(os.path.join(path, fp))]
     transitions = []
     for fp in files:
-        assert os.path.basename(fp).startswith("transitions_") and os.path.basename(fp).endswith(".pkl")
-        if not (os.path.basename(fp).startswith("transitions_") and os.path.basename(fp).endswith(".pkl")):
+        assert os.path.basename(fp).endswith(".pkl")
+        if not (os.path.basename(fp).endswith(".pkl")):
             continue
         with open(fp, "rb") as f:
             obj = pickle.load(f)
@@ -58,14 +61,18 @@ def inspect_buffer(path: str):
     done_indices = [i for i, o in enumerate(transitions) if o['dones'] == 1]
     print()
     print("Pick a trajectory from the following end timesteps:")
-    print(done_indices)
+    print(done_indices + ["all"])
     done_index = input(f"[{done_indices[0]}] ")
     if done_index == "":
         done_index = done_indices[0]
-    done_index = int(done_index)
+    if done_index == "all":
+        done_index = len(transitions) - 1
+        start_index = 0
+    else:
+        done_index = int(done_index)
+        assert done_index in done_indices
+        start_index = done_indices[done_indices.index(done_index) - 1] + 1 if done_indices.index(done_index) - 1 >= 0 else 0
     print(done_index)
-    assert done_index in done_indices
-    start_index = done_indices[done_indices.index(done_index) - 1] + 1 if done_indices.index(done_index) - 1 >= 0 else 0
 
     camera_keys = list(transitions[start_index]["observations"].keys() - {"state"})
     assert len(camera_keys) > 0
@@ -85,8 +92,9 @@ def inspect_buffer(path: str):
         assert frame.dtype == np.uint8
         assert frame.shape == (1, 128, 128, 3)
         frame = frame[0]
-        new_frame = np.zeros((450, 400, 3), dtype=np.uint8)
-        new_frame[50:,:,:] = cv2.resize(frame, (400, 400))
+        new_frame = np.zeros((450, 800, 3), dtype=np.uint8)
+        new_frame[50:,:400,:] = cv2.resize(frame, (400, 400))
+        new_frame[50:,400:,:] = cv2.resize(tr["next_observations"][camera_key][0], (400, 400))
 
         new_frame = cv2.putText(
             img = new_frame,
@@ -99,11 +107,22 @@ def inspect_buffer(path: str):
             lineType = cv2.LINE_AA,
         )
 
+        new_frame = cv2.putText(
+            img = new_frame,
+            text = f"r={tr['rewards']}",
+            org = (120, 40),
+            fontFace = cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale = 1,
+            color = (255, 255, 255),
+            thickness = 2,
+            lineType = cv2.LINE_AA,
+        )
+
         if "info" in tr and "intervene_action" in tr["info"]:
             new_frame = cv2.putText(
                 img = new_frame,
                 text = f"intervene",
-                org = (120, 40),
+                org = (220, 40),
                 fontFace = cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale = 1,
                 color = (255, 255, 255),
@@ -182,11 +201,13 @@ def inspect_classifier_data(path: str):
 def main(_):
     folder = _get_folder()
     path = os.path.normpath(folder)
-    folder_name = os.path.basename(path)
-    if folder_name == "buffer":
+    folder_name = os.path.basename(path) if os.path.isdir(path) else os.path.basename(os.path.dirname(path))
+    if folder_name == "buffer" or folder_name == "bc_buffer":
         inspect_buffer(path)
     elif folder_name == "classifier_data":
         inspect_classifier_data(path)
+    elif folder_name == "demo_data":
+        inspect_buffer(path)
     else:
         raise Exception()
 
