@@ -201,7 +201,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
     )
 
     # Function to update the agent with new params
-    learner_step = 0
+    learner_step = start_step
     def update_params(params):
         if isinstance(params, dict) and set(params.keys()) == set(["step"]):
             nonlocal learner_step
@@ -394,6 +394,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 transition['grasp_penalty']= info['grasp_penalty']
             data_store.insert(transition)
             transitions.append(copy.deepcopy(transition) | {'info': info})
+            if already_intervened:
+                intvn_data_store.insert(transition)
+                demo_transitions.append(copy.deepcopy(transition) | {'info': info})
             if FLAGS.use_bc_loss and "intervene_action" in info:
                 bc_data_store.insert(transition)
                 bc_transitions.append(transition)
@@ -433,9 +436,9 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng, pref_data_stor
                 time.sleep(7.0)
                 obs, _ = env.reset()
                 # For synchronizing learner and actor...
-                if step > learner_step * 1 + 300:
+                if step > learner_step * 1 + 200:
                     print("Stopped actor")
-                    while step > learner_step * 1 + 300:
+                    while step > learner_step * 1 + 200:
                         time.sleep(0.5)
                     print("Released actor")
                 print("reset end")
@@ -632,10 +635,10 @@ def learner(rng, agent: SACAgentHybridSingleArm, replay_buffer, demo_buffer, pre
     for step in tqdm.tqdm(
         range(start_step + config.pretraining_steps, config.max_steps + config.pretraining_steps), dynamic_ncols=True, desc="learner"
     ):
-        if step - config.pretraining_steps > len(replay_buffer) * 1 + 1:
-            while step - config.pretraining_steps > len(replay_buffer) * 1 + 1:
+        if step - config.pretraining_steps > len(replay_buffer) * 1 + 1 + 300:
+            while step - config.pretraining_steps > len(replay_buffer) * 1 + 1 + 300:
                 time.sleep(0.5)
-            print(f"Training for another {(len(replay_buffer) * 1 + 1) - (step - config.pretraining_steps) + 1} steps...")
+            print(f"Training for another {(len(replay_buffer) * 1 + 1 + 300) - (step - config.pretraining_steps) + 1} steps...")
         # run n-1 critic updates and 1 critic + actor update.
         # This makes training on GPU faster by reducing the large batch transfer time from CPU to GPU
         if FLAGS.method != "hgdagger":
@@ -710,7 +713,6 @@ def main(_):
         fake_env=FLAGS.learner,
         save_video=FLAGS.save_video,
         classifier=True,
-        state_based=FLAGS.state_based,
     )
     env = RecordEpisodeStatistics(env)
 
@@ -886,7 +888,7 @@ def main(_):
             )
 
         assert FLAGS.demo_path is not None
-        if not prev_checkpoint_exist:
+        if len(demo_buffer) == 0:
             num_demos = 0
             for path in FLAGS.demo_path:
                 with open(path, "rb") as f:
