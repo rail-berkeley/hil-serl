@@ -809,7 +809,7 @@ def main(_):
         return demo_buffer
 
     def create_preference_buffer():
-        if FLAGS.method in ["rlif", "hgdagger"]:
+        if FLAGS.method in ["rlif", "hgdagger", "hil"]:
             return None
         preference_buffer = PreferenceBufferDataStore(
             env.observation_space,
