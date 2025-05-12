@@ -15,8 +15,11 @@ from typing import Dict
 
 from franka_env.camera.video_capture import VideoCapture
 from franka_env.camera.rs_capture import RSCapture
+from franka_env.camera.zed_capture import ZedCapture
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
+def print_yellow(x):
+    return print("\033[93m {}\033[00m".format(x))
 
 class ImageDisplayer(threading.Thread):
     def __init__(self, queue, name):
@@ -47,8 +50,8 @@ class DefaultEnvConfig:
 
     SERVER_URL: str = "http://127.0.0.1:5000/"
     REALSENSE_CAMERAS: Dict = {
-        "wrist_1": "130322274175",
-        "wrist_2": "127122270572",
+        # "wrist_1": "130322274175",
+        # "wrist_2": "127122270572",
     }
     IMAGE_CROP: dict[str, callable] = {}
     TARGET_POSE: np.ndarray = np.zeros((6,))
@@ -397,9 +400,19 @@ class FrankaEnv(gym.Env):
 
         self.cap = OrderedDict()
         for cam_name, kwargs in name_serial_dict.items():
-            cap = VideoCapture(
-                RSCapture(name=cam_name, **kwargs)
-            )
+            assert "camera_type" in kwargs
+            camera_type = kwargs['camera_type']
+            del kwargs['camera_type']
+            if camera_type == "rs":
+                cap = VideoCapture(
+                    RSCapture(name=cam_name, **kwargs)
+                )
+            elif camera_type == "zed":
+                cap = VideoCapture(
+                    ZedCapture(name=cam_name, **kwargs)
+                )
+            else:
+                raise NotImplementedError
             self.cap[cam_name] = cap
 
     def close_cameras(self):
@@ -425,11 +438,13 @@ class FrankaEnv(gym.Env):
         """Internal function to send gripper command to the robot."""
         if mode == "binary":
             if (pos <= -0.5) and (self.curr_gripper_pos > 0.85) and (time.time() - self.last_gripper_act > self.gripper_sleep):  # close gripper
+                print_yellow("close.")
                 requests.post(self.url + "close_gripper")
                 self.last_gripper_act = time.time()
                 time.sleep(self.gripper_sleep)
             elif (pos >= 0.5) and (self.curr_gripper_pos < 0.85) and (time.time() - self.last_gripper_act > self.gripper_sleep):  # open gripper
-                requests.post(self.url + "open_gripper")
+                print_yellow("open.")
+                requests.post(self.url + "reset_gripper")
                 self.last_gripper_act = time.time()
                 time.sleep(self.gripper_sleep)
             else: 

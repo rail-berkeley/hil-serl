@@ -72,7 +72,7 @@ class MemoryEfficientReplayBuffer(ReplayBuffer):
             obs_pixels[pixel_key] = data_dict["observations"].pop(pixel_key)
             next_obs_pixels[pixel_key] = data_dict["next_observations"].pop(pixel_key)
 
-        if self._first:
+        if self._first and self._num_stack is not None:
             for i in range(self._num_stack):
                 for pixel_key in self.pixel_keys:
                     data_dict["observations"][pixel_key] = obs_pixels[pixel_key][i]
@@ -88,9 +88,10 @@ class MemoryEfficientReplayBuffer(ReplayBuffer):
         self._is_correct_index[self._insert_index] = True
         super().insert(data_dict)
 
-        for i in range(self._num_stack):
-            indx = (self._insert_index + i) % len(self)
-            self._is_correct_index[indx] = False
+        if self._num_stack is not None:
+            for i in range(self._num_stack):
+                indx = (self._insert_index + i) % len(self)
+                self._is_correct_index[indx] = False
 
     def sample(
         self,

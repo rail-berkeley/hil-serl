@@ -52,7 +52,7 @@ class Critic(nn.Module):
         self, observations: jnp.ndarray, actions: jnp.ndarray, train: bool = False
     ) -> jnp.ndarray:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations)
 
@@ -81,9 +81,41 @@ class GraspCritic(nn.Module):
         train: bool = False
     ) -> jnp.ndarray:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations)
+        
+        outputs = self.network(obs_enc, train)
+        if self.init_final is not None:
+            value = nn.Dense(
+                self.output_dim,
+                kernel_init=nn.initializers.uniform(-self.init_final, self.init_final),
+            )(outputs)
+        else:
+            value = nn.Dense(self.output_dim, kernel_init=default_init())(outputs)
+        return value # (batch_size, self.output_dim)
+
+
+class AlphaNetwork(nn.Module):
+    encoder: Optional[nn.Module]
+    network: nn.Module
+    init_final: Optional[float] = None
+    output_dim: Optional[int] = 10
+    
+    @nn.compact
+    def __call__(
+        self, 
+        o_pre,
+        o_post,
+        train: bool = False
+    ) -> jnp.ndarray:
+        if self.encoder is None:
+            o_pre_enc = o_pre['state']
+            o_post_enc = o_post['state']
+        else:
+            o_pre_enc = self.encoder(o_pre)
+            o_post_enc = self.encoder(o_post)
+        obs_enc = jnp.concatenate([o_pre_enc, o_post_enc], axis=-1)
         
         outputs = self.network(obs_enc, train)
         if self.init_final is not None:
@@ -130,7 +162,7 @@ class Policy(nn.Module):
         self, observations: jnp.ndarray, temperature: float = 1.0, train: bool = False, non_squash_distribution: bool = False,
     ) -> distrax.Distribution:
         if self.encoder is None:
-            obs_enc = observations
+            obs_enc = observations['state']
         else:
             obs_enc = self.encoder(observations, train=train, stop_gradient=True)
 

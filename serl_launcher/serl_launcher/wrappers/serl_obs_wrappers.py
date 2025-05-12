@@ -48,3 +48,30 @@ def flatten_observations(obs, proprio_space, proprio_keys):
             **(obs["images"]),
         }
         return obs
+
+
+class AWrapperThatFlattensState(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        assert "image" not in env.observation_space
+
+        self.proprio_keys = list(self.env.observation_space["state"].keys())
+
+        self.proprio_space = gym.spaces.Dict(
+            {key: self.env.observation_space["state"][key] for key in self.proprio_keys}
+        )
+        self.observation_space = gym.spaces.Dict(
+            {
+                "state": flatten_space(self.proprio_space),
+            }
+        )
+
+    def observation(self, obs):
+        obs = {
+            "state": flatten(
+                self.proprio_space,
+                {key: obs["state"][0][key] for key in self.proprio_keys},
+            ),
+        }
+        return obs
+
