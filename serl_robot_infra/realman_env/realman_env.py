@@ -110,6 +110,7 @@ class AgilexEnv(gym.Env):
         self.gripper_open = config.gripper_open
         self.gripper_close = config.gripper_close
         self.topic_prefix =  config.ARM
+        self.grip_status = 0
         self.curr_joint = []
         self.curr_end_pos = np.full(7, 0.0, dtype=np.float32)
         self.curr_end_pos[6] = 1.0
@@ -212,6 +213,9 @@ class AgilexEnv(gym.Env):
         self.gripper_state_sub = rospy.Subscriber(
             f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state
         )
+        self.gripper_grip_status = rospy.Subscriber(
+            f"{self.topic_prefix}/gripper_grip_status", Float64, self.update_grip_status
+        )
         self.cameras_subscrib = {}
         for key, values in self.config.CAMERAS.items():
             self.cameras_subscrib[key] = rospy.Subscriber(
@@ -253,6 +257,10 @@ class AgilexEnv(gym.Env):
         factor = 0.01
         range = max(self.gripper_open - self.gripper_close, 1)
         self.curr_gripper_pos = [np.clip((gripper_state.data - self.gripper_close)/range, 0.0, 1.0)]
+
+    def update_gripper_state(self, status):
+        # print(f"get gripper val {gripper_state}")
+        self.grip_status = status
 
     def img_callback(self, image, key):
         #ros_time = rospy.Time.now()
@@ -369,20 +377,22 @@ class AgilexEnv(gym.Env):
 
     def compute_reward(self, obs) -> bool:
         current_pose = obs["state"]["tcp_pose"]
-        # convert from quat to euler first
-        current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
-        target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
-        diff_rot = current_rot.T @ target_rot
-        diff_euler = Rotation.from_matrix(diff_rot).as_euler("xyz")
-        delta = np.abs(
-            np.hstack([current_pose[:3] - self._TARGET_POSE[:3], diff_euler])
-        )
-        # print(f"Delta: {delta}")
-        if np.all(delta < self._REWARD_THRESHOLD):
+        if self.grip_status == 2 and current_pose[2] > self.resetpos[2]:
             return True
-        else:
-            # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
-            return False
+        # convert from quat to euler first
+        #current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
+        #target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
+        #diff_rot = current_rot.T @ target_rot
+        #diff_euler = Rotation.from_matrix(diff_rot).as_euler("xyz")
+        #delta = np.abs(
+        #    np.hstack([current_pose[:3] - self._TARGET_POSE[:3], diff_euler])
+        #)
+        ## print(f"Delta: {delta}")
+        #if np.all(delta < self._REWARD_THRESHOLD):
+        #    return True
+        #else:
+        #    # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
+        #    return False
 
     def get_im(self) -> Dict[str, np.ndarray]:
         """Get images from the realsense cameras."""
