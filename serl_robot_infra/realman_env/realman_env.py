@@ -6,6 +6,7 @@ import gymnasium as gym
 import cv2
 import copy
 from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Slerp
 import time
 import requests
 import queue
@@ -334,6 +335,7 @@ class AgilexEnv(gym.Env):
         # self.nextpos[:3] = actioin[:3]
         # self.nextpos[3:] = euler_2_quat(action[3:6])
         try:
+            action = np.clip(action, -1.0, 1.0)
             xyz_delta = action[:3]
             self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
             ## GET ORIENTATION FROM ACTION
@@ -390,9 +392,17 @@ class AgilexEnv(gym.Env):
         """Move the robot to the goal position with linear interpolation."""
         if goal.shape == (6,):
             goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
+        key_times = [0, 1]
+        key_rots = Rotation.from_quat([self.curr_end_pos[3:], goal[3:]])
+        slerp = Slerp(key_times, key_rots)
         steps = int(timeout * self.hz)
+        interpolate_times = np.linspace(0, 1, steps)
+        path_slerp = slerp(interpolate_times)
+        path_slerp = [rot.as_quat() for rot in path_slerp]
         path = np.linspace(self.curr_end_pos, goal, steps)
-        for p in path:
+        for idx, p in enumerate(path):
+            p[3:] = path_slerp[idx]
+            #print(f"reset p {p}")
             self._send_pos_command(p)
             time.sleep(1 / self.hz)
         self.nextpos = p
