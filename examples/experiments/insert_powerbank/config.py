@@ -107,7 +107,7 @@ class TrainConfig(DefaultTrainingConfig):
         )
         if not fake_env:
             env = SpacemouseIntervention(env)
-            env = ExpertIntervWrapper(env)
+            #env = ExpertIntervWrapper(env)
         # action is assumed to be (x, y, z, rx, ry, rz, gripper)
         # Transform action from end-effector frame to base frame
         env = RelativeFrame(env)
