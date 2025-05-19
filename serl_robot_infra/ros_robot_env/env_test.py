@@ -1,5 +1,5 @@
-from realman_env import AgilexEnv
-from realman_env import DefaultEnvConfig
+from robot_env import RobotRosEnv
+from robot_env import DefaultEnvConfig
 import numpy as np
 
 import time
@@ -70,7 +70,7 @@ class LeftEnvConfig(DefaultEnvConfig):
         "rotational_Ki": 0.0,
     }
 
-env = AgilexEnv(
+env = RobotRosEnv(
     config=LeftEnvConfig(), fake_env=False, save_video=False
 )
 count = 0

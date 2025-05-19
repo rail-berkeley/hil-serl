@@ -9,8 +9,8 @@ from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
 
 from experiments.config import DefaultTrainingConfig
-from realman_env.realman_env import DefaultEnvConfig
-from realman_env.realman_env import AgilexEnv
+from ros_robot_env.robot_env import DefaultEnvConfig
+from ros_robot_env.robot_env import RobotRosEnv
 from experiments.lift_cup.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
@@ -100,7 +100,7 @@ class TrainConfig(DefaultTrainingConfig):
     setup_mode = "single-arm-learned-gripper"
 
     def get_environment(self, fake_env=False, save_video=False, classifier=False):
-        env = AgilexEnv(
+        env = RobotRosEnv(
             hz=10, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         if not fake_env:

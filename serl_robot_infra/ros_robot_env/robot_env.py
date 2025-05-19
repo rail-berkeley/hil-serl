@@ -91,7 +91,7 @@ class DefaultEnvConfig:
 ##############################################################################
 
 
-class AgilexEnv(gym.Env):
+class RobotRosEnv(gym.Env):
     def __init__(
         self,
         hz=10,
