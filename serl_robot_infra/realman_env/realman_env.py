@@ -21,6 +21,7 @@ import rospy
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState, Image
 from std_msgs.msg import Float64
+from std_msgs.msg import Int32
 from std_msgs.msg import Header
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
@@ -214,7 +215,7 @@ class AgilexEnv(gym.Env):
             f"{self.topic_prefix}/gripper_angle", Float64, self.update_gripper_state
         )
         self.gripper_grip_status = rospy.Subscriber(
-            f"{self.topic_prefix}/gripper_grip_status", Float64, self.update_grip_status
+            f"{self.topic_prefix}/gripper_grip_status", Int32, self.update_grip_status
         )
         self.cameras_subscrib = {}
         for key, values in self.config.CAMERAS.items():
@@ -258,9 +259,8 @@ class AgilexEnv(gym.Env):
         range = max(self.gripper_open - self.gripper_close, 1)
         self.curr_gripper_pos = [np.clip((gripper_state.data - self.gripper_close)/range, 0.0, 1.0)]
 
-    def update_gripper_state(self, status):
-        # print(f"get gripper val {gripper_state}")
-        self.grip_status = status
+    def update_grip_status(self, status):
+        self.grip_status = status.data
 
     def img_callback(self, image, key):
         #ros_time = rospy.Time.now()
@@ -375,10 +375,12 @@ class AgilexEnv(gym.Env):
         )
         return ob, int(reward), done, False, {"succeed": reward}
 
-    def compute_reward(self, obs) -> bool:
+    def compute_reward(self, obs):
+        print(f"compute reward in env")
         current_pose = obs["state"]["tcp_pose"]
         if self.grip_status == 2 and current_pose[2] > self.resetpos[2]:
-            return True
+            return 1
+        return 0
         # convert from quat to euler first
         #current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
         #target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
@@ -548,7 +550,7 @@ class AgilexEnv(gym.Env):
         if mode == "binary":
             if (
                 (pos <= -0.5)
-                and (self.curr_gripper_pos[0] > 0.85)
+                #and (self.curr_gripper_pos[0] > 0.85)
                 and (time.time() - self.last_gripper_act > self.gripper_sleep)
             ):  # close gripper
                 # specified for nong fu shan quan bottole
@@ -556,7 +558,7 @@ class AgilexEnv(gym.Env):
                 self.last_gripper_act = time.time()
             elif (
                 (pos >= 0.5)
-                and (self.curr_gripper_pos[0] < 0.85)
+                #and (self.curr_gripper_pos[0] < 0.85)
             ):  # open gripper
                 self.gripper_pub.publish(self.gripper_open)
                 self.last_gripper_act = time.time()
