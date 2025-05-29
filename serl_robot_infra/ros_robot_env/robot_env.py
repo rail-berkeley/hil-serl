@@ -63,6 +63,7 @@ class DefaultEnvConfig:
     CAMERAS: Dict = {
         "wrist": "127122270572",
     }
+    DEPTH_CAMERAS: Dict = {}
     IMAGE_CROP: dict[str, callable] = {}
     TARGET_POSE: np.ndarray = np.zeros((6,))
     GRASP_POSE: np.ndarray = np.zeros((6,))
@@ -171,7 +172,7 @@ class RobotRosEnv(gym.Env):
                 "images": gym.spaces.Dict(
                     {
                         key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
-                        for key in config.CAMERAS
+                        for key in {**config.CAMERAS, **config.DEPTH_CAMERAS}
                     }
                 ),
             }
@@ -226,6 +227,16 @@ class RobotRosEnv(gym.Env):
                 queue_size=1,
                 tcp_nodelay=True,
             )
+            
+        for key, values in self.config.DEPTH_CAMERAS.items():
+            print(f"sub cam {key}, {values}")
+            self.cameras_subscrib[key] = rospy.Subscriber(
+                values,
+                Image,
+                partial(self.depth_img_callback, key=key),
+                queue_size=1,
+                tcp_nodelay=True,
+            )
         self.end_pose_pub = rospy.Publisher(
             self.topic_prefix + "/control_pose", Pose, queue_size=1
         )
@@ -263,12 +274,7 @@ class RobotRosEnv(gym.Env):
         self.grip_status = status.data
 
     def img_callback(self, image, key):
-        #ros_time = rospy.Time.now()
-        #ros_time_str = f"sec:{ros_time.secs} nsec: {ros_time.nsecs }"  # 秒.毫秒
-        #
-        #rospy.loginfo(f"ROS Time: {ros_time_str}")
-        #stamp = image.header.stamp
-        #rospy.loginfo(f"Image {key} Timestamp: {stamp.secs} nsec: {stamp.nsecs}")
+        #TODO: encode to rgb
         cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
         # print(f"image shape {key} {cv_image.shape}")
         cropped_rgb = self.config.IMAGE_CROP[key](cv_image) if key in self.config.IMAGE_CROP else  cv_image
@@ -289,6 +295,19 @@ class RobotRosEnv(gym.Env):
         #    self.wrist_img[key] = [cv_image]
         # else:
         #    self.wrist_img[key].append(cv_image)
+
+    def depth_img_callback(self, image, key):
+        #TODO: encode to rgb
+        cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="passthrough")
+        #print(f"image shape {key} {cv_image.shape}")
+        cropped_rgb = self.config.IMAGE_CROP[key](cv_image) if key in self.config.IMAGE_CROP else  cv_image
+        resized = cv2.resize(
+            cropped_rgb, self.observation_space["images"][key].shape[:2][::-1]
+        )
+        scaled_depth = cv2.convertScaleAbs(resized, alpha=0.03)  # alpha控制对比度
+        pseudo_rgb = cv2.applyColorMap(scaled_depth, cv2.COLORMAP_JET)  #
+        #resized = cv2.cvtColor(pseudo_rgb, cv2.COLOR_GRAY2BGR)
+        self.wrist_img[key] = pseudo_rgb
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
