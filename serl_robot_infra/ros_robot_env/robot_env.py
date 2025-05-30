@@ -14,7 +14,6 @@ import threading
 from datetime import datetime
 from collections import OrderedDict
 from typing import Dict
-
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
@@ -150,6 +149,7 @@ class RobotRosEnv(gym.Env):
                         "gripper_pose": gym.spaces.Box(-1, 1, shape=(1,)),
                         "tcp_force": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
                         "tcp_torque": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
+                        "grip_status": gym.spaces.Discrete(4), 
                     }
                 ),
                 "images": gym.spaces.Dict(
@@ -255,6 +255,7 @@ class RobotRosEnv(gym.Env):
         done = (
             self.curr_path_length >= self.max_episode_length or reward or self.terminate
         )
+        # print(ob,'*'*200000)
         return ob, int(reward), done, False, {"succeed": reward}
 
     def compute_reward(self, obs):

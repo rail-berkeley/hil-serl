@@ -11,7 +11,7 @@ from serl_launcher.networks.reward_classifier import load_classifier_func
 from experiments.config import DefaultTrainingConfig
 from ros_robot_env.robot_env import DefaultEnvConfig
 from ros_robot_env.robot_env import RobotRosEnv
-from experiments.grab_earphone.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper
+from experiments.grab_earphone.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper #TimePenaltyWrapper, ForcePenaltyWrapper, JitterPenaltyWrapper
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
     SpacemouseIntervention,
@@ -20,30 +20,43 @@ from franka_env.envs.wrappers import (
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import Quat2EulerWrapper
 
+USE_FORCE_PENALTY = False
+USE_TIME_PENALTY = False
+USE_JITTER_PENALTY = False
 
 class RightEnvConfig(DefaultEnvConfig):
     ARM = "dobot"
     CAMERAS = {
-        "wrist": "/1/camera/color/image_raw",
-        #"front": "/camera_f/color/image_raw",
-        "side": "/2/camera/color/image_raw",
+        "wrist": "/1/camera/color/image_raw", # "/camera_r/color/image_raw",
+        "wrist2": "/2/camera/color/image_raw", # "/camera_l/color/image_raw",
+        # "side": "/camera_s/color/image_raw",
+    }
+    DEPTH_CAMERAS = {
+        "wrist_depth": "/1/camera/aligned_depth_to_color/image_raw", # "/camera_r/depth/image_rect_raw",
+        "wrist2_depth": "/2/camera/aligned_depth_to_color/image_raw", # "/camera_l/depth/image_rect_raw",
+        # "side_depth": "/camera_s/depth/image_rect_raw",
     }
     IMAGE_CROP = {
-        "side": lambda img: img[0:480, 120:600],
+        # "side": lambda img: img[0:480, 120:600],
         #"wrist": lambda img: img[0:400, 130:530],
-        "wrist": lambda img: img[0:480, 0:640],
-        "front": lambda img: img[50:400, 50:600],
+        "wrist": lambda img: img[0:450, 150:750],
+        "wrist2": lambda img: img[0:450, 150:750],
+        "wrist_depth": lambda img: img[0:480, 150:750],
+        "wrist2_depth": lambda img: img[0:450, 150:750],
     }
-    RESET_POSE = np.array([0.43, 0.051, 0.070, 3.14, 0.0, 0.0])
-    ABS_POSE_LIMIT_LOW = np.array([0.40, 0.03, 0.030, 3.12, -0.10, -0.2])
-    ABS_POSE_LIMIT_HIGH = np.array([0.474, 0.156, 0.072, 3.15, 0.10, 0.2])
+
+    Z_OFFSET = -0.035
+    RESET_POSE = np.array([0.452, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, 00])
+    ABS_POSE_LIMIT_LOW = np.array([0.42, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -1.57])
+    ABS_POSE_LIMIT_HIGH = np.array([0.484, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 1.57])
     gripper_open = 330
     gripper_close = 30
 
     RANDOM_RESET = False
-    ACTION_SCALE = (0.01, 0.10, 1)
+    ACTION_SCALE = (0.015, 0.15, 1)
     DISPLAY_IMAGE = True
-    MAX_EPISODE_LENGTH = 150
+    MAX_EPISODE_LENGTH = 100
+
 
     GRIPPER_SLEEP = 1.0
     COMPLIANCE_PARAM = {
@@ -89,12 +102,15 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
-    image_keys = ["side", "wrist"]
-    classifier_keys = ["side"]
+    image_keys = ["wrist2","wrist2_depth", "wrist_depth",  "wrist"]
+    classifier_keys = None
     proprio_keys = [
         "tcp_pose",
         "tcp_vel",
         "gripper_pose",
+        "tcp_force",
+        "tcp_torque",
+        "grip_status"
     ]
     buffer_period = 1000
     checkpoint_period = 1000
@@ -135,4 +151,11 @@ class TrainConfig(DefaultTrainingConfig):
 
             env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
         env = GripperPenaltyWrapper(env, penalty=-0.02)
+        # env = GripperPenaltyWrapper(env, penalty=0)
+        if USE_FORCE_PENALTY:
+            env = ForcePenaltyWrapper(env)
+        if USE_TIME_PENALTY:
+            env = TimePenaltyWrapper(env)
+        if USE_JITTER_PENALTY:
+            env = JitterPenaltyWrapper(env)
         return env

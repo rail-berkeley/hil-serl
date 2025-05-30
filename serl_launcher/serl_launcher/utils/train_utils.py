@@ -116,7 +116,8 @@ def load_resnet10_params(agent, image_keys=("image",), public=True):
         file_path = os.path.expanduser("~/.serl/")
         if not os.path.exists(file_path):
             os.makedirs(file_path)
-        file_path = os.path.join(file_path, file_name)
+        file_path = os.path.join(file_path, file_name)  # 
+        # file_path = '/home/amigo/xjc/checkpoint.pkl'
         # Check if the file exists
         if os.path.exists(file_path):
             print(f"The ResNet-10 weights already exist at '{file_path}'.")
@@ -142,8 +143,11 @@ def load_resnet10_params(agent, image_keys=("image",), public=True):
             print("Download complete!")
 
         with open(file_path, "rb") as f:
+            print('use params in path:', file_path)
             encoder_params = pkl.load(f)
-
+    # Resnet18的系数包在encoder
+    if 'encoder' in encoder_params:
+        encoder_params = encoder_params['encoder']
     param_count = sum(x.size for x in jax.tree_leaves(encoder_params))
     print(
         f"Loaded {param_count/1e6}M parameters from ResNet-10 pretrained on ImageNet-1K"
@@ -158,6 +162,10 @@ def load_resnet10_params(agent, image_keys=("image",), public=True):
         if "pretrained_encoder" in new_encoder_params:
             new_encoder_params = new_encoder_params["pretrained_encoder"]
         for k in new_encoder_params:
+            print(f"loading {k} from pretrained_encoder")
+            if k == 'Dense_0' or k == 'LayerNorm_0':
+                # skip the last dense layer and layer norm
+                continue
             if k in encoder_params:
                 new_encoder_params[k] = encoder_params[k]
                 print(f"replaced {k} in pretrained_encoder")

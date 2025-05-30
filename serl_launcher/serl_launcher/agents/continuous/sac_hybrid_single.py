@@ -590,11 +590,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         policy_network_kwargs["activate_final"] = True
         critic_network_kwargs["activate_final"] = True
-        use_deeper_net = False
+        use_deeper_net = False  # Use ResNet-10 by default
 
         if encoder_type == "resnet":
             from serl_launcher.vision.resnet_v1 import resnetv1_configs
-
             encoders = {
                 image_key: resnetv1_configs["resnetv1-10"](
                     pooling_method="spatial_learned_embeddings",
@@ -609,10 +608,10 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 PreTrainedResNetEncoder,
             )
             if use_deeper_net:
-                from serl_launcher.vision.resnet_torch import (
+                from serl_launcher.vision.resnet_v1 import (
                     resnetv1_configs
                 )
-                pretrained_encoder = resnetv1_configs["resnetv1-34"](
+                pretrained_encoder = resnetv1_configs["resnetv1-18-frozen"](
                     pre_pooling=True,
                     name="pretrained_encoder",
                 )
@@ -696,11 +695,11 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         )
 
         if "pretrained" in encoder_type:  # load pretrained weights for ResNet-10
-            if use_deeper_net:
-                from serl_launcher.utils.train_utils import load_resnet_torch_params
-                agent = load_resnet_torch_params(agent, image_keys)
-            else:
-                from serl_launcher.utils.train_utils import load_resnet10_params
-                agent = load_resnet10_params(agent, image_keys)
+            # if use_deeper_net:
+            #     from serl_launcher.utils.train_utils import load_resnet_torch_params
+            #     agent = load_resnet_torch_params(agent, image_keys)
+            # else:
+            from serl_launcher.utils.train_utils import load_resnet10_params
+            agent = load_resnet10_params(agent, image_keys)
 
         return agent

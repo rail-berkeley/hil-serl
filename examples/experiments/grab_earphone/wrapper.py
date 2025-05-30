@@ -139,6 +139,47 @@ class DualAgilexEnv(AgilexEnv):
         ob = {"state": left_state | right_state, "images": left_images | right_images}
         return ob
 
+class ForcePenaltyWrapper(gym.Wrapper):
+    def __init__(self, env, thresh=10, penalty_coef=1e-3, max_penalty=0.05):
+        '''
+        - force_threshold: float, acceptable force magnitude threshold
+        - penalty_coef: float, penalty scaling factor (lambda)
+        '''
+        super().__init__(env)
+        self.thresh = thresh
+        self.penalty_coef = penalty_coef    
+        self.max_penalty = max_penalty
+
+    def compute_penalty(self, force_vector):
+        """
+        Compute reward based on force feedback and task completion status.
+
+        Parameters:
+        - force_vector: np.array of shape (3,), the force readings [Fx, Fy, Fz]
+
+        Returns:
+        - reward: float, final reward value
+        """
+        # Calculate L2 norm of the force vector
+        force_norm = np.linalg.norm(force_vector)
+        
+        # Calculate penalty if force exceeds threshold
+        excess_force = max(0.0, force_norm - self.thresh)
+        penalty = self.penalty_coef * excess_force
+        penalty = min(self.max_penalty, penalty)
+        print(f"force norm: {force_norm}")
+        print(f"force penalty: {penalty}")
+        return -penalty
+
+    def step(self, action):
+        """Modifies the :attr:`env` :meth:`step` reward using :meth:`self.reward`."""
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        force_vector = self.env.curr_force[:3]
+        penalty = self.compute_penalty(force_vector)
+        # reward *= 100
+        reward += penalty
+        print(f"reward: {reward}")
+        return observation, reward, terminated, truncated, info
 
 class GripperPenaltyWrapper(gym.Wrapper):
     def __init__(self, env, penalty=-0.05):
