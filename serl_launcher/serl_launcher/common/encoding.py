@@ -42,7 +42,6 @@ class EncodingWrapper(nn.Module):
                         image = rearrange(image, "T H W C -> H W (T C)")
                     if len(image.shape) == 5:
                         image = rearrange(image, "B T H W C -> B H W (T C)")
-
             image = self.encoder[image_key](image, train=train, encode=not is_encoded)
 
             if stop_gradient:

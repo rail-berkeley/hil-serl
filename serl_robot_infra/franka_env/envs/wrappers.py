@@ -230,7 +230,7 @@ class SpacemouseIntervention(gym.ActionWrapper):
         self.left, self.right = tuple(buttons)
         intervened = False
         
-        if np.linalg.norm(expert_a) > 0.001:
+        if np.linalg.norm(expert_a) > 0.001 or (self.left or self.right):
             intervened = True
 
         if self.gripper_enabled:

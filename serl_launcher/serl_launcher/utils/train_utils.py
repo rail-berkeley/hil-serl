@@ -116,8 +116,7 @@ def load_resnet10_params(agent, image_keys=("image",), public=True):
         file_path = os.path.expanduser("~/.serl/")
         if not os.path.exists(file_path):
             os.makedirs(file_path)
-        file_path = os.path.join(file_path, file_name)  # 
-        # file_path = '/home/amigo/xjc/checkpoint.pkl'
+        file_path = os.path.join(file_path, file_name)
         # Check if the file exists
         if os.path.exists(file_path):
             print(f"The ResNet-10 weights already exist at '{file_path}'.")

@@ -11,7 +11,7 @@ from serl_launcher.networks.reward_classifier import load_classifier_func
 from experiments.config import DefaultTrainingConfig
 from ros_robot_env.robot_env import DefaultEnvConfig
 from ros_robot_env.robot_env import RobotRosEnv
-from experiments.grab_earphone.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper #TimePenaltyWrapper, ForcePenaltyWrapper, JitterPenaltyWrapper
+from experiments.grab_earphone.wrapper import GripperPenaltyWrapper, ExpertIntervWrapper, TimePenaltyWrapper, ForcePenaltyWrapper, JitterPenaltyWrapper
 from franka_env.envs.wrappers import (
     MultiCameraBinaryRewardClassifierWrapper,
     SpacemouseIntervention,
@@ -21,7 +21,7 @@ from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import Quat2EulerWrapper
 
 USE_FORCE_PENALTY = False
-USE_TIME_PENALTY = False
+USE_TIME_PENALTY = True
 USE_JITTER_PENALTY = False
 
 class RightEnvConfig(DefaultEnvConfig):
@@ -46,9 +46,9 @@ class RightEnvConfig(DefaultEnvConfig):
     }
 
     Z_OFFSET = -0.035
-    RESET_POSE = np.array([0.452, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, 00])
-    ABS_POSE_LIMIT_LOW = np.array([0.42, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -1.57])
-    ABS_POSE_LIMIT_HIGH = np.array([0.484, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 1.57])
+    RESET_POSE = np.array([0.43, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, -1.0])
+    ABS_POSE_LIMIT_LOW = np.array([0.42, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -1.45])
+    ABS_POSE_LIMIT_HIGH = np.array([0.484, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 1.45])
     gripper_open = 330
     gripper_close = 30
 

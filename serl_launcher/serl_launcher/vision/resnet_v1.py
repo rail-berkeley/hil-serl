@@ -396,7 +396,7 @@ resnetv1_configs = {
         ResNetEncoder, stage_sizes=(3, 4, 6, 3), block_cls=ResNetBlock
     ),
     "resnetv1-50": ft.partial(
-        ResNetEncoder, stage_sizes=[3, 4, 6, 3], block_cls=BottleneckResNetBlock
+        ResNetEncoder, stage_sizes=[3, 4, 6, 3], block_cls=BottleneckResNetBlock,
     ),
     "resnetv1-18-deeper": ft.partial(
         ResNetEncoder, stage_sizes=(3, 3, 3, 3), block_cls=ResNetBlock

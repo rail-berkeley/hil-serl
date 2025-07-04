@@ -26,6 +26,10 @@ from experiments.object_handover_agilex.transformers import (
     construct_homogeneous_matrix,
 )
 
+import ctypes
+import posix_ipc
+import mmap
+
 
 class DualAgilexEnv(AgilexEnv):
     def __init__(
@@ -140,7 +144,7 @@ class DualAgilexEnv(AgilexEnv):
         return ob
 
 class ForcePenaltyWrapper(gym.Wrapper):
-    def __init__(self, env, thresh=10, penalty_coef=1e-3, max_penalty=0.05):
+    def __init__(self, env, thresh=10, penalty_coef=1e-3, max_penalty=3e-3):
         '''
         - force_threshold: float, acceptable force magnitude threshold
         - penalty_coef: float, penalty scaling factor (lambda)
@@ -180,6 +184,60 @@ class ForcePenaltyWrapper(gym.Wrapper):
         reward += penalty
         print(f"reward: {reward}")
         return observation, reward, terminated, truncated, info
+    
+class TimePenaltyWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.pause_start_time = None
+        self.total_pause_time = 0
+        self._was_paused = False
+        
+        # 尝试访问共享内存中的暂停状态
+        self.gl_stop_state = None
+        try:
+            shm = posix_ipc.SharedMemory("/shared_state")
+            shared_data = mmap.mmap(shm.fd, shm.size)
+            self.gl_stop_state = ctypes.c_bool.from_buffer(shared_data)
+            self.has_pause_access = True
+        except:
+            self.has_pause_access = False
+            print("Warning: Cannot access pause state, will not exclude pause time")
+
+    def step(self, action):
+        # 只有在可以访问暂停状态时才处理暂停逻辑
+        if self.has_pause_access and self.gl_stop_state is not None:
+            # 检查是否从暂停状态恢复
+            if self._was_paused and not self.gl_stop_state.value:
+                if self.pause_start_time:
+                    self.total_pause_time += time.time() - self.pause_start_time
+                    self.pause_start_time = None
+                self._was_paused = False
+            
+            # 检查是否进入暂停状态
+            if self.gl_stop_state.value and not self._was_paused:
+                self.pause_start_time = time.time()
+                self._was_paused = True
+        
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        if reward > 0:
+            if self.has_pause_access and self.total_pause_time > 0:
+                # 排除暂停时间
+                actual_time_used = min(20, time.time() - self.env.start_time - self.total_pause_time)
+            else:
+                # 不排除暂停时间（原始行为）
+                actual_time_used = min(20, time.time() - self.env.start_time)
+            
+            reward += 1/actual_time_used
+            print(f'time used: {actual_time_used} s')
+            print(f"reward: {reward}")
+        return observation, reward, terminated, truncated, info
+
+    def reset(self, **kwargs):
+        # 重置暂停时间计数
+        self.total_pause_time = 0
+        self.pause_start_time = None
+        self._was_paused = False
+        return self.env.reset(**kwargs)
 
 class GripperPenaltyWrapper(gym.Wrapper):
     def __init__(self, env, penalty=-0.05):
@@ -199,9 +257,17 @@ class GripperPenaltyWrapper(gym.Wrapper):
         if "intervene_action" in info:
             action = info["intervene_action"]
 
+        state = observation["state"]
+        # print("state shape:", state.shape)
+
+        current_grip_status  = int(state[0, -1])
+
         info["grasp_penalty"] = 0.0
-        if (action[6] < -0.5 and self.last_left_gripper_pos > 0.85) or (
-            action[6] > 0.5 and self.last_left_gripper_pos < 0.85
+        # if (action[6] < -0.5 and self.last_left_gripper_pos > 0.85 and (current_grip_status in (0, 3))) or (
+        #     action[6] > 0.5 and self.last_left_gripper_pos < 0.85 and current_grip_status in (2, 1)
+        # ):
+        if (action[6] <= 0 and current_grip_status == 3) or (
+            action[6] > 0.5 and current_grip_status == 2
         ):
             info["grasp_penalty"] += self.penalty
             print("left grasp penalty")
@@ -209,6 +275,145 @@ class GripperPenaltyWrapper(gym.Wrapper):
         self.last_left_gripper_pos = observation["state"][0, 0]
 
         return observation, reward, terminated, truncated, info
+
+class JitterPenaltyWrapper(gym.Wrapper):
+    def __init__(self, env, penalty_coef=0.1, max_penalty=1, history_length=5):
+        """
+        抖动惩罚包装器
+        
+        Parameters:
+        - penalty_coef: float, 抖动惩罚系数
+        - max_penalty: float, 最大惩罚值
+        - history_length: int, 用于计算抖动的历史动作长度
+        """
+        super().__init__(env)
+        self.penalty_coef = penalty_coef
+        self.max_penalty = max_penalty
+        self.history_length = history_length
+        
+        # 存储历史动作和位置信息
+        self.action_history = deque(maxlen=history_length)
+        self.tcp_pos_history = deque(maxlen=history_length)
+        self.tcp_vel_history = deque(maxlen=history_length)
+
+    def compute_jitter_penalty(self, current_action, current_tcp_pos, current_tcp_vel):
+        """
+        计算抖动惩罚
+        
+        Returns:
+        - penalty: float, 抖动惩罚值（负数）
+        """
+        if len(self.action_history) < 2:
+            return 0.0
+        
+        penalty = 0.0
+        
+        # 1. 动作变化率惩罚（检测动作的突然变化）
+        if len(self.action_history) >= 2:
+            action_diff1 = np.array(current_action) - np.array(self.action_history[-1])
+            action_diff2 = np.array(self.action_history[-1]) - np.array(self.action_history[-2])
+            
+            # 计算动作加速度（二阶导数）
+            action_acceleration = action_diff1 - action_diff2
+            action_jerk = np.linalg.norm(action_acceleration[:6])  # 只考虑位置和旋转，不包括夹爪
+            
+            # 动作抖动惩罚
+            if action_jerk > 0.05:  # 阈值可以调整
+                penalty += self.penalty_coef * action_jerk
+        
+        # 2. 位置抖动惩罚
+        if len(self.tcp_pos_history) >= 2:
+            pos_current = np.array(current_tcp_pos[:3])  # 只取位置部分
+            pos_last = np.array(self.tcp_pos_history[-1][:3])
+            
+            if len(self.tcp_pos_history) >= 3:
+                pos_prev = np.array(self.tcp_pos_history[-2][:3])
+                
+                # 计算位置的二阶导数（加速度）
+                vel_current = pos_current - pos_last
+                vel_last = pos_last - pos_prev
+                pos_acceleration = vel_current - vel_last
+                pos_jerk = np.linalg.norm(pos_acceleration)
+                
+                # 位置抖动惩罚
+                if pos_jerk > 0.05:  # 阈值可以调整
+                    penalty += self.penalty_coef * pos_jerk 
+        
+        # 3. 速度突变惩罚
+        if len(self.tcp_vel_history) >= 2:
+            vel_current = np.array(current_tcp_vel[:3])  # 线性速度
+            vel_last = np.array(self.tcp_vel_history[-1][:3])
+            
+            vel_change = np.linalg.norm(vel_current - vel_last)
+            
+            # 速度突变惩罚
+            if vel_change > 0.05:  # 阈值可以调整
+                penalty += self.penalty_coef * vel_change
+        
+        # 限制最大惩罚
+        penalty = min(self.max_penalty, penalty)*(-1)
+        
+        if penalty < 0:
+            print(f"Jitter penalty: {penalty:.4f}")
+        
+        return penalty
+
+    def step(self, action):
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        
+        # 获取当前状态信息
+        if hasattr(self.env, 'curr_end_pos'):
+            current_tcp_pos = self.env.curr_end_pos
+        else:
+            # 从observation中获取TCP位置
+            if "state" in observation:
+                if "tcp_pose" in observation["state"]:
+                    current_tcp_pos = observation["state"]["tcp_pose"]
+                elif "left/tcp_pose" in observation["state"]:
+                    current_tcp_pos = observation["state"]["left/tcp_pose"]
+                else:
+                    current_tcp_pos = np.zeros(7)
+            else:
+                current_tcp_pos = np.zeros(7)
+        
+        # 获取TCP速度
+        if hasattr(self.env, 'curr_end_vel'):
+            current_tcp_vel = self.env.curr_end_vel
+        else:
+            if "state" in observation:
+                if "tcp_vel" in observation["state"]:
+                    current_tcp_vel = observation["state"]["tcp_vel"]
+                elif "left/tcp_vel" in observation["state"]:
+                    current_tcp_vel = observation["state"]["left/tcp_vel"]
+                else:
+                    current_tcp_vel = np.zeros(6)
+            else:
+                current_tcp_vel = np.zeros(6)
+        
+        # 计算抖动惩罚
+        jitter_penalty = self.compute_jitter_penalty(action, current_tcp_pos, current_tcp_vel)
+        
+        # 更新历史记录
+        self.action_history.append(action.copy())
+        self.tcp_pos_history.append(current_tcp_pos.copy())
+        self.tcp_vel_history.append(current_tcp_vel.copy())
+        
+        # 应用惩罚
+        reward += jitter_penalty
+        
+        # 添加调试信息
+        if "jitter_penalty" not in info:
+            info["jitter_penalty"] = jitter_penalty
+        
+        return observation, reward, terminated, truncated, info
+    
+    def reset(self, **kwargs):
+        """重置时清空历史记录"""
+        self.action_history.clear()
+        self.tcp_pos_history.clear()
+        self.tcp_vel_history.clear()
+        return self.env.reset(**kwargs)
+
 
 
 import copy

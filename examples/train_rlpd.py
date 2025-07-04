@@ -19,6 +19,7 @@ from colorama import Fore, Style
 
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
+import gymnasium as gym
 
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
@@ -43,7 +44,7 @@ from experiments.mappings import CONFIG_MAPPING
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
-flags.DEFINE_integer("seed", 42, "Random seed.")
+flags.DEFINE_integer("seed", 40, "Random seed.")
 flags.DEFINE_boolean("learner", False, "Whether this is a learner.")
 flags.DEFINE_boolean("actor", False, "Whether this is an actor.")
 flags.DEFINE_string("ip", "localhost", "IP address of the learner.")
@@ -52,6 +53,7 @@ flags.DEFINE_string("checkpoint_path", None, "Path to save checkpoints.")
 flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint.")
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
 flags.DEFINE_boolean("save_video", False, "Save video.")
+flags.DEFINE_boolean("remove_xy", True, "Remove X Y coordinate")
 
 flags.DEFINE_boolean(
     "debug", False, "Debug mode."
@@ -78,7 +80,10 @@ def has_checkpoint_folder(directory):
         if os.path.isdir(item_path) and item.startswith("checkpoint_"):
             return True
     return False
-
+def remove_xy(observation):
+    removed = observation['state'][0][2:]
+    observation['state'] = removed[None, :]
+    return observation
 
 ##############################################################################
 
@@ -104,16 +109,20 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             while gl_stop_state.value:
                 time.sleep(0.5)
             obs, _ = env.reset()
+            if FLAGS.remove_xy:
+                obs = remove_xy(obs)
             done = False
             start_time = time.time()
             while not done:
                 sampling_rng, key = jax.random.split(sampling_rng)
-                actions = agent.sample_actions(
+                actions, _ = agent.sample_actions(
                     observations=jax.device_put(obs), argmax=False, seed=key
                 )
                 actions = np.asarray(jax.device_get(actions))
 
                 next_obs, reward, done, truncated, info = env.step(actions)
+                if FLAGS.remove_xy:
+                    next_obs = remove_xy(next_obs)
                 obs = next_obs
 
                 if done:
@@ -122,7 +131,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                         time_list.append(dt)
                         print(dt)
 
-                    success_counter += reward
+                    success_counter += int(reward > 0)
                     env.has_done = False
                     print(reward)
                     print(f"{success_counter}/{episode + 1}")
@@ -169,6 +178,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     demo_transitions = []
 
     obs, _ = env.reset()
+    if FLAGS.remove_xy:
+        obs = remove_xy(obs)
     done = False
 
     # training loop
@@ -190,16 +201,18 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 actions = env.action_space.sample()
             else:
                 sampling_rng, key = jax.random.split(sampling_rng)
-                actions = agent.sample_actions(
+                actions, grasp_q_values = agent.sample_actions(
                     observations=jax.device_put(obs),
                     seed=key,
                     argmax=False,
                 )
                 actions = np.asarray(jax.device_get(actions))
-
+                print('grasp_q_values:', grasp_q_values)
         # Step environment
         with timer.context("step_env"):
             next_obs, reward, done, truncated, info = env.step(actions)
+            if FLAGS.remove_xy:
+                next_obs = remove_xy(next_obs)
             if "left" in info:
                 info.pop("left")
             if "right" in info:
@@ -249,6 +262,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 res = client.update()
                 print_green(f"finish update client, res {res}")
                 obs, _ = env.reset()
+                if FLAGS.remove_xy:
+                    obs = remove_xy(obs)
         flag_render = False
         if flag_render:
             env.render()
@@ -519,9 +534,12 @@ def main(_):
         )
         include_grasp_penalty = False
     elif config.setup_mode == "single-arm-learned-gripper":
+        obs = env.observation_space.sample()
+        if FLAGS.remove_xy:
+            obs = remove_xy(obs)
         agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(
             seed=FLAGS.seed,
-            sample_obs=env.observation_space.sample(),
+            sample_obs= obs,
             sample_action=env.action_space.sample(),
             image_keys=config.image_keys,
             encoder_type=config.encoder_type,
@@ -543,7 +561,10 @@ def main(_):
 
     # replicate agent across devices
     # need the jnp.array to avoid a bug where device_put doesn't recognize primitives
-    agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
+    # agent = jax.device_put(jax.tree_map(jnp.array, agent.), sharding.replicate())
+    # 模型系数放到GPU上
+    params_on_gpu = jax.device_put(jax.tree_map(jnp.array, agent.state.params), sharding.replicate())
+    agent = agent.replace(state=agent.state.replace(params=params_on_gpu))
 
     if FLAGS.checkpoint_path is not None and has_checkpoint_folder(FLAGS.checkpoint_path):
         input("Checkpoint path already exists. Press Enter to resume training.")
@@ -558,8 +579,15 @@ def main(_):
         print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
 
     def create_replay_buffer_and_wandb_logger():
+        obs_space = env.observation_space
+        if FLAGS.remove_xy:
+            new_space = copy.deepcopy(obs_space)
+            new_shape = list(new_space["state"].shape)
+            new_shape[-1] -= 2
+            new_space["state"] = gym.spaces.Box(-np.inf, np.inf, new_shape)
+            obs_space = new_space
         replay_buffer = MemoryEfficientReplayBufferDataStore(
-            env.observation_space,
+            obs_space,
             env.action_space,
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
@@ -574,10 +602,17 @@ def main(_):
         return replay_buffer, wandb_logger
 
     if FLAGS.learner:
+        obs_space = env.observation_space
+        if FLAGS.remove_xy:
+            new_space = copy.deepcopy(obs_space)
+            new_shape = list(new_space["state"].shape)
+            new_shape[-1] -= 2
+            new_space["state"] = gym.spaces.Box(-np.inf, np.inf, new_shape)
+            obs_space = new_space
         sampling_rng = jax.device_put(sampling_rng, device=sharding.replicate())
         replay_buffer, wandb_logger = create_replay_buffer_and_wandb_logger()
         demo_buffer = MemoryEfficientReplayBufferDataStore(
-            env.observation_space,
+            obs_space,
             env.action_space,
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,

@@ -81,7 +81,7 @@ def create_classifier(
         tx=optax.adam(learning_rate=1e-4),
     )
 
-    file_name = "resnet10_params.pkl"
+    file_name = "resnet10_params.pkl" #"checkpoint_0604_resnetv1-50_71.pkl"
     # Construct the full path to the file
     file_path = os.path.expanduser("~/.serl/")
     if not os.path.exists(file_path):

@@ -448,7 +448,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
         grasp_action = grasp_q_values.argmax(axis=-1)
         grasp_action = grasp_action - 1  # Mapping back to {-1, 0, 1}
 
-        return jnp.concatenate([ee_actions, grasp_action[..., None]], axis=-1)
+        return jnp.concatenate([ee_actions, grasp_action[..., None]], axis=-1), grasp_q_values
 
     @classmethod
     def create(
@@ -611,7 +611,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
                 from serl_launcher.vision.resnet_v1 import (
                     resnetv1_configs
                 )
-                pretrained_encoder = resnetv1_configs["resnetv1-18-frozen"](
+                pretrained_encoder = resnetv1_configs["resnetv1-18"](
                     pre_pooling=True,
                     name="pretrained_encoder",
                 )
