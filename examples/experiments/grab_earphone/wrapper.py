@@ -187,57 +187,27 @@ class ForcePenaltyWrapper(gym.Wrapper):
     
 class TimePenaltyWrapper(gym.Wrapper):
     def __init__(self, env):
+        '''
+        - force_threshold: float, acceptable force magnitude threshold
+        - penalty_coef: float, penalty scaling factor (lambda)
+        '''
         super().__init__(env)
-        self.pause_start_time = None
-        self.total_pause_time = 0
-        self._was_paused = False
-        
-        # 尝试访问共享内存中的暂停状态
-        self.gl_stop_state = None
-        try:
-            shm = posix_ipc.SharedMemory("/shared_state")
-            shared_data = mmap.mmap(shm.fd, shm.size)
-            self.gl_stop_state = ctypes.c_bool.from_buffer(shared_data)
-            self.has_pause_access = True
-        except:
-            self.has_pause_access = False
-            print("Warning: Cannot access pause state, will not exclude pause time")
+        self.start_time = time.time()
+    
+    def reset(self, **kwargs):
+        """重置时记录开始时间"""
+        self.start_time = time.time()
+        return self.env.reset(**kwargs)
 
     def step(self, action):
-        # 只有在可以访问暂停状态时才处理暂停逻辑
-        if self.has_pause_access and self.gl_stop_state is not None:
-            # 检查是否从暂停状态恢复
-            if self._was_paused and not self.gl_stop_state.value:
-                if self.pause_start_time:
-                    self.total_pause_time += time.time() - self.pause_start_time
-                    self.pause_start_time = None
-                self._was_paused = False
-            
-            # 检查是否进入暂停状态
-            if self.gl_stop_state.value and not self._was_paused:
-                self.pause_start_time = time.time()
-                self._was_paused = True
-        
+        """Modifies the :attr:`env` :meth:`step` reward using :meth:`self.reward`."""
         observation, reward, terminated, truncated, info = self.env.step(action)
         if reward > 0:
-            if self.has_pause_access and self.total_pause_time > 0:
-                # 排除暂停时间
-                actual_time_used = min(20, time.time() - self.env.start_time - self.total_pause_time)
-            else:
-                # 不排除暂停时间（原始行为）
-                actual_time_used = min(20, time.time() - self.env.start_time)
-            
-            reward += 1/actual_time_used
-            print(f'time used: {actual_time_used} s')
+            time_used = min(20, time.time() - self.start_time)  # max 20 s
+            reward += 1/time_used
+            print(f'time used: {time_used} s')
             print(f"reward: {reward}")
         return observation, reward, terminated, truncated, info
-
-    def reset(self, **kwargs):
-        # 重置暂停时间计数
-        self.total_pause_time = 0
-        self.pause_start_time = None
-        self._was_paused = False
-        return self.env.reset(**kwargs)
 
 class GripperPenaltyWrapper(gym.Wrapper):
     def __init__(self, env, penalty=-0.05):
