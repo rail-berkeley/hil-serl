@@ -24,9 +24,9 @@ from franka_env.envs.wrappers import Quat2EulerWrapper
 class RightEnvConfig(DefaultEnvConfig):
     ARM = "dobot"
     CAMERAS = {
-        "wrist": "/camera_r/color/image_raw",
+        "wrist": "/1/camera/color/image_raw",
         #"front": "/camera_f/color/image_raw",
-        "side": "/camera_s/color/image_raw",
+        "side": "/2/camera/color/image_raw",
     }
     IMAGE_CROP = {
         "side": lambda img: img[0:480, 120:600],

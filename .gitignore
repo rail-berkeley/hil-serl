@@ -11,4 +11,4 @@ franka_sim/franka_sim/.DS_Store
 examples/experiments/*/first_run*/
 examples/experiments/*/demo_data*/
 examples/experiments/*/wandb/
-examples/experiments/*/__pycache__/
+__pycache__
