@@ -383,8 +383,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         for critic_step in range(config.cta_ratio - 1):
             with timer.context("sample_replay_buffer"):
                 batch = next(replay_iterator)
-                #demo_batch = next(demo_iterator)
-                #batch = concat_batches(batch, demo_batch, axis=0)
+                # demo_batch = next(demo_iterator)
+                # batch = concat_batches(batch, demo_batch, axis=0)
 
             with timer.context("train_critics"):
                 #print("before update critic")
@@ -396,8 +396,8 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
 
         with timer.context("train"):
             batch = next(replay_iterator)
-            #demo_batch = next(demo_iterator)
-            #batch = concat_batches(batch, demo_batch, axis=0)
+            # demo_batch = next(demo_iterator)
+            # batch = concat_batches(batch, demo_batch, axis=0)
             #print("before update actor")
             agent, update_info = agent.update(
                 batch,

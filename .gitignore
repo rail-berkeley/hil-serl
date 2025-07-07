@@ -13,4 +13,4 @@ examples/experiments/*/demo_data*/
 examples/experiments/*/wandb/
 __pycache__
 examples/experiments/*/__pycache__/
-examples/experiments/*/first_*/
+actions/
