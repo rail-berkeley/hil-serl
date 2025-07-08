@@ -46,9 +46,9 @@ class RightEnvConfig(DefaultEnvConfig):
     }
 
     Z_OFFSET = -0.035
-    RESET_POSE = np.array([0.43, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, -1.0])
-    ABS_POSE_LIMIT_LOW = np.array([0.42, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -1.45])
-    ABS_POSE_LIMIT_HIGH = np.array([0.484, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 1.45])
+    RESET_POSE = np.array([0.53, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, -1.57])
+    ABS_POSE_LIMIT_LOW = np.array([0.50, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -2.1])
+    ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, -1.1])
     gripper_open = 330
     gripper_close = 30
 
