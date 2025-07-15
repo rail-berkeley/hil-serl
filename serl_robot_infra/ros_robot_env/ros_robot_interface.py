@@ -265,7 +265,7 @@ class RobotRosInterface:
             if (
                 (pos <= -0.5)
                 # and (self.curr_gripper_pos[0] > 0.85)
-                and (time.time() - self.last_gripper_act > self.gripper_sleep)
+                # and (time.time() - self.last_gripper_act > self.gripper_sleep)
             ):  # close gripper
                 # specified for nong fu shan quan bottole
                 self.gripper_pub.publish(self.gripper_close)

@@ -45,10 +45,10 @@ class RightEnvConfig(DefaultEnvConfig):
         "wrist2_depth": lambda img: img[0:450, 150:750],
     }
 
-    Z_OFFSET = -0.035
+    Z_OFFSET = -0.036
     RESET_POSE = np.array([0.53, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, -1.57])
-    ABS_POSE_LIMIT_LOW = np.array([0.50, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -2.1])
-    ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, -1.1])
+    ABS_POSE_LIMIT_LOW = np.array([0.50, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -3.14])
+    ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 0])
     gripper_open = 330
     gripper_close = 30
 
