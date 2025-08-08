@@ -265,6 +265,8 @@ class SpacemouseIntervention(gym.ActionWrapper):
             info["intervene_action"] = new_action
         info["left"] = self.left
         info["right"] = self.right
+        if self.left:
+            rew = 1
         return obs, rew, done, truncated, info
 
 class DualSpacemouseIntervention(gym.ActionWrapper):

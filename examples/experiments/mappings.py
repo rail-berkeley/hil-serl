@@ -18,6 +18,7 @@ from experiments.pick_pen.config import TrainConfig as PickPenTrainConfig
 from experiments.insert_battery.config import TrainConfig as InsertBatteryTrainConfig
 from experiments.insert_powerbank.config import TrainConfig as InsertPowerbankTrainConfig
 from experiments.grab_earphone.config import TrainConfig as GrabEarphoneTrainingConfig
+from experiments.insert_usb.config import TrainConfig as InsertUsbTrainingConfig
 
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
@@ -33,6 +34,7 @@ CONFIG_MAPPING = {
     "pick_pen": PickPenTrainConfig,
     "insert_battery": InsertBatteryTrainConfig,
     "insert_powerbank": InsertPowerbankTrainConfig,
-    "grab_earphone": GrabEarphoneTrainingConfig
+    "grab_earphone": GrabEarphoneTrainingConfig,
+    "insert_usb": InsertUsbTrainingConfig,
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

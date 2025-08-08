@@ -17,6 +17,11 @@ from typing import Dict
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
+# 添加ROS相关导入
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+
 from ros_robot_env.ros_robot_interface import RobotRosInterface
 
 
@@ -173,6 +178,15 @@ class RobotRosEnv(gym.Env):
         self.display_img_id = 0
         print("Initialized Agilex")
 
+        # 初始化用于新相机的变量
+        self.new_camera_image = None
+        self.cv_bridge = CvBridge()
+        self.new_camera_subscriber = None
+
+        # 只在非fake环境中初始化相机订阅
+        if not fake_env:
+            self._init_new_camera_subscriber()
+
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
         # print(
@@ -237,6 +251,7 @@ class RobotRosEnv(gym.Env):
             ).as_quat()
 
             gripper_action = action[6] * self.action_scale[2]
+            gripper_action = -1.0
             # print(f"pos before clip: {self.nextpos}")
             if self.control_arm:
                 self.robot.send_gripper_command(gripper_action)
@@ -259,11 +274,54 @@ class RobotRosEnv(gym.Env):
         return ob, int(reward), done, False, {"succeed": reward}
 
     def compute_reward(self, obs):
+        # print(f"compute reward in env")
+        # current_pose = obs["state"]["tcp_pose"]
+        # if self.robot.grip_status == 2 and current_pose[2] > self.resetpos[2]:
+        #     return 1
+        # return 0
+
+        """基于图像亮度判断U盘插入成功"""
         print(f"compute reward in env")
-        current_pose = obs["state"]["tcp_pose"]
-        if self.robot.grip_status == 2 and current_pose[2] > self.resetpos[2]:
-            return 1
-        return 0
+
+        if self.new_camera_image is None:
+            # print("Warning: No image data from new camera")
+            return 0
+
+        image = self.new_camera_image.copy()
+
+        roi = (325, 324, 401, 391)  # (x1, y1, x2, y2) 根据实际红色方框位置调整
+
+        success_detected = False
+        brightness_threshold = 300  # 根据实际情况调整阈值
+
+        # 转换为灰度图
+        if len(image.shape) == 3:
+            gray = np.dot(image[...,:3], [0.299, 0.587, 0.114])
+        else:
+            gray = image
+
+        # 确保坐标在图像范围内
+        h, w = gray.shape
+        x1, y1, x2, y2 = roi
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+
+        # 提取ROI区域并计算平均亮度
+        roi_region = gray[y1:y2, x1:x2]
+        if roi_region.size > 0:
+            roi_brightness = np.mean(roi_region)
+            print(f"ROI brightness: {roi_brightness:.2f} (threshold: {brightness_threshold})")
+            print(f"Image shape: {gray.shape}, ROI coordinates: ({x1}, {y1}, {x2}, {y2}), ROI shape: {roi_region.shape}")
+
+            # 如果ROI区域亮度超过阈值，认为成功
+            if roi_brightness > brightness_threshold:
+                print(f"SUCCESS DETECTED!  roi_brightness: {roi_brightness:.2f}")
+                success_detected = True
+        else:
+            print(f"Warning: ROI is empty")
+
+        return 1 if success_detected else 0
+
         # convert from quat to euler first
         # current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
         # target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
@@ -304,7 +362,8 @@ class RobotRosEnv(gym.Env):
         implemented each subclass for the specific task.
         Should override this method if custom reset procedure is needed.
         """
-        self.robot.send_gripper_command(1)
+        # self.robot.send_gripper_command(1)
+        self.robot.send_gripper_command(-1.0)
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
@@ -312,6 +371,14 @@ class RobotRosEnv(gym.Env):
             self.robot.send_joint_command(JOINT_RESET)
             time.sleep(1.5)
             return
+
+        # 先提高z轴到安全高度
+        current_pos = self.robot.curr_end_pos.copy()
+        safe_height_pose = current_pos.copy()
+        safe_height_pose[2] = max(current_pos[2] + 0.03, self.resetpos[2] + 0.01)  # 提高3cm或比重置位置高1cm
+        print(f"First lifting to safe height: {safe_height_pose[:3]}")
+        self.interpolate_move(safe_height_pose, timeout=1.0)
+        time.sleep(0.5)  # 等待提升完成
 
         # Perform Carteasian reset
         if self.randomreset:  # randomize reset position in xy plane
@@ -406,7 +473,34 @@ class RobotRosEnv(gym.Env):
             self.img_queue.put(dis_images)
         return obs
 
+    def _init_new_camera_subscriber(self):
+        """初始化新相机的订阅者"""
+        try:
+            self.new_camera_subscriber = rospy.Subscriber(
+                "/wrist/color/image_raw",
+                Image,
+                self._new_camera_callback,
+                queue_size=1,
+                tcp_nodelay=True,
+            )
+            print("Successfully subscribed to /wrist/color/image_raw")
+        except Exception as e:
+            print(f"Failed to subscribe to new camera: {e}")
+
+    def _new_camera_callback(self, msg):
+        """新相机的回调函数"""
+        try:
+            # 转换ROS图像消息为OpenCV格式
+            cv_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            self.new_camera_image = cv_image
+        except Exception as e:
+            print(f"Error processing new camera image: {e}")
+
     def close(self):
+        # 关闭新相机订阅
+        if self.new_camera_subscriber is not None:
+            self.new_camera_subscriber.unregister()
+
         if hasattr(self, "listener"):
             self.listener.stop()
         if self.display_image:
