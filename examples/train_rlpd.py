@@ -20,6 +20,7 @@ from colorama import Fore, Style
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 from natsort import natsorted
 import gymnasium as gym
+import cv2
 
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
@@ -84,7 +85,29 @@ def remove_xy(observation):
     removed = observation['state'][0][2:]
     observation['state'] = removed[None, :]
     return observation
+def convert_image_format(transition):
+    """将图像从(C,H,W)格式转换为(H,W,C)格式，并调整尺寸"""
+    image_keys = ['wrist', 'wrist2', 'wrist2_depth', 'wrist_depth']
 
+    for key in ["observations", "next_observations"]:
+        if key in transition:
+            obs = transition[key]
+            for img_key in image_keys:
+                if img_key in obs:
+                    img = obs[img_key]
+                    # 检查是否需要转换格式
+                    if len(img.shape) == 4 and img.shape[1] == 3:  # (1, 3, H, W)
+                        # 去掉batch维度并转换为channel-last
+                        img = img[0]  # (3, H, W)
+                        img = np.transpose(img, (1, 2, 0))  # (H, W, 3)
+                        img = cv2.resize(img, (128, 128))   # 调整到期望尺寸
+                        obs[img_key] = img
+                    elif len(img.shape) == 3 and img.shape[0] == 3:  # (3, H, W)
+                        # 转换为channel-last
+                        img = np.transpose(img, (1, 2, 0))  # (H, W, 3)
+                        img = cv2.resize(img, (128, 128))   # 调整到期望尺寸
+                        obs[img_key] = img
+    return transition
 ##############################################################################
 
 
@@ -625,6 +648,7 @@ def main(_):
                 with open(path, "rb") as f:
                     transitions = pkl.load(f)
                     for transition in transitions:
+                        transition = convert_image_format(transition)
                         if (
                             "infos" in transition
                             and "grasp_penalty" in transition["infos"]
