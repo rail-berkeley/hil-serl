@@ -4,10 +4,10 @@ export WANDB_ENTITY=724183484zz@gmail.com
 export WANDB_API_KEY=cbacbd4d69837b2f36b650e8682607b8910fa76c
 python ../../train_rlpd.py "$@" \
     --exp_name=grab_earphone \
-    --checkpoint_path=first_new_dobot4 \
+    --checkpoint_path=first_change_camera_position \
     --demo_path=... \
     --actor \
-    #--eval_checkpoint_step=28000 \
-    #--eval_n_trajs=10 \
+    --eval_checkpoint_step=36000 \
+    --eval_n_trajs=10 \
 
 

@@ -47,7 +47,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
     RESET_POSE = np.array([0.53, 0.051, 0.164, 3.14, 0.0, -3.14])
     ABS_POSE_LIMIT_LOW = np.array([0.50, 0.01, 0.089, 3.14, 0.0, -3.14])
-    ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.166, 3.14, 0.0,-2.84])
+    ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.166, 3.14, 0.0, -3.14])
     gripper_open = 600
     gripper_close = 250
 

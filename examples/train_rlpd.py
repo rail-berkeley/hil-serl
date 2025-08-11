@@ -54,7 +54,7 @@ flags.DEFINE_string("checkpoint_path", None, "Path to save checkpoints.")
 flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint.")
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
 flags.DEFINE_boolean("save_video", False, "Save video.")
-flags.DEFINE_boolean("remove_xy", True, "Remove X Y coordinate")
+flags.DEFINE_boolean("remove_xy", False, "Remove X Y coordinate")
 
 flags.DEFINE_boolean(
     "debug", False, "Debug mode."
