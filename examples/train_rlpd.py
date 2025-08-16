@@ -152,6 +152,8 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                     if reward:
                         dt = time.time() - start_time
                         time_list.append(dt)
+                        env.robot.move_z(-0.01)
+                        time.sleep(1.5)
                         print(dt)
 
                     success_counter += int(reward > 0)

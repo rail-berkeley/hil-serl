@@ -166,6 +166,11 @@ class RobotRosInterface:
             self.topic_prefix + "/control_joint", JointState, queue_size=1
         )
 
+    def move_z(self, dz):
+        target_pose = copy.deepcopy(self.curr_end_pos)
+        target_pose[2] += dz
+        self.send_pos_command(target_pose)
+
     def update_curr_joint(self, joint_state):
         self.curr_joint = list(joint_state.position)
         # print(f"joint state: {self.curr_joint}")
