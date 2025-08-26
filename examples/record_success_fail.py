@@ -4,8 +4,10 @@ from tqdm import tqdm
 import numpy as np
 import pickle as pkl
 import datetime
+import sys
 from absl import app, flags
 from pynput import keyboard
+import time
 
 from experiments.mappings import CONFIG_MAPPING
 
@@ -18,11 +20,12 @@ flags.DEFINE_integer(
 
 success_key = False
 failed_key = False
-
+quit=False
 
 def on_press(key):
     global success_key
     global failed_key
+    global quit
     try:
         if key.char == 's':
             success_key = True
@@ -30,6 +33,8 @@ def on_press(key):
         if key.char == 'f':
             success_key = False
             failed_key = True
+        if key.char == 'q':
+            quit=True
     except AttributeError:
         pass
 
@@ -45,6 +50,7 @@ def on_release(key):
 def main(_):
     global success_key
     global failed_key
+    global quit
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
@@ -53,12 +59,12 @@ def main(_):
 
     obs, _ = (
         env.reset()
-    )  # obs: currpos, currvel, curr_gripper_pos, currforce, currtorque
+    ) 
+    print("finished reset reset") # obs: currpos, currvel, curr_gripper_pos, currforce, currtorque
     successes = []
     failures = []
     success_needed = FLAGS.successes_needed
     pbar = tqdm(total=success_needed)
-
     while len(successes) < success_needed:
         actions = np.zeros(env.action_space.sample().shape)
         next_obs, rew, done, truncated, info = env.step(actions)
@@ -85,9 +91,11 @@ def main(_):
             print("insert failed")
             failures.append(transition)
 
-        if done or truncated:
-            obs, _ = env.reset()
-
+        # if done or truncated:
+        #     obs, _ = env.reset()
+        if quit:
+            break
+    
     if not os.path.exists("./classifier_data"):
         os.makedirs("./classifier_data")
     uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

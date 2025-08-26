@@ -203,7 +203,10 @@ class RobotRosEnv(gym.Env):
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
+        
         euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
+        if any(np.abs(euler) > np.pi):
+           print(f"big euler {euler}")
         # print(
         #    Fore.RED
         #    + f" {self.rpy_bounding_box.low} "
@@ -348,6 +351,7 @@ class RobotRosEnv(gym.Env):
         """Move the robot to the goal position with linear interpolation."""
         if goal.shape == (6,):
             goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
+            print("pos+quat",goal)
         key_times = [0, 1]
         key_rots = Rotation.from_quat([self.robot.curr_end_pos[3:], goal[3:]])
         slerp = Slerp(key_times, key_rots)
@@ -358,7 +362,7 @@ class RobotRosEnv(gym.Env):
         path = np.linspace(self.robot.curr_end_pos, goal, steps)
         for idx, p in enumerate(path):
             p[3:] = path_slerp[idx]
-            # print(f"reset p {p}")
+            # print(f"reset p {path_slerp[idx]}")
             self.robot.send_pos_command(p)
             time.sleep(1 / self.hz)
         self.nextpos = p
@@ -370,7 +374,7 @@ class RobotRosEnv(gym.Env):
         Should override this method if custom reset procedure is needed.
         """
         # self.robot.send_gripper_command(1)
-        self.robot.send_gripper_command(-1.0)
+        self.robot.send_gripper_command(-1)
         # Perform joint reset if needed
         if joint_reset:
             print("JOINT RESET")
@@ -380,12 +384,12 @@ class RobotRosEnv(gym.Env):
             return
 
         # 先提高z轴到安全高度
-        current_pos = self.robot.curr_end_pos.copy()
-        safe_height_pose = current_pos.copy()
-        safe_height_pose[2] = max(current_pos[2] + 0.03, self.resetpos[2] + 0.01)  # 提高3cm或比重置位置高1cm
-        print(f"First lifting to safe height: {safe_height_pose[:3]}")
-        self.interpolate_move(safe_height_pose, timeout=1.0)
-        time.sleep(0.5)  # 等待提升完成
+        # current_pos = self.robot.curr_end_pos.copy()
+        # safe_height_pose = current_pos.copy()
+        # safe_height_pose[2] = max(current_pos[2] + 0.03, self.resetpos[2] + 0.01)  # 提高3cm或比重置位置高1cm
+        # print(f"First lifting to safe height: {safe_height_pose[:3]}")
+        # self.interpolate_move(safe_height_pose, timeout=1)
+        # time.sleep(1)  # 等待提升完成
 
         # Perform Carteasian reset
         if self.randomreset:  # randomize reset position in xy plane
@@ -401,8 +405,8 @@ class RobotRosEnv(gym.Env):
             self.interpolate_move(reset_pose, timeout=1)
         else:
             reset_pose = self.resetpos.copy()
-            self.interpolate_move(reset_pose, timeout=1)
-        time.sleep(1.0)
+            self.interpolate_move(reset_pose, timeout=2)
+        time.sleep(1)
 
         # Change to compliance mode
         # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
