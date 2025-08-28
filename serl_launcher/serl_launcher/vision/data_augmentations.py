@@ -23,8 +23,9 @@ def random_crop(img, rng, *, padding):
 def batched_random_crop(img, rng, *, padding, num_batch_dims: int = 1):
     # Flatten batch dims
     original_shape = img.shape
+    
     img = jnp.reshape(img, (-1, *img.shape[num_batch_dims:]))
-
+    
     rngs = jax.random.split(rng, img.shape[0])
 
     img = jax.vmap(
@@ -334,7 +335,7 @@ def gaussian_blur(
         sigma_max=sigma_max,
         apply_prob=apply_prob,
     )
-    return blur_fn(rng, image)
+    return blur_fn(image, rng)
 
 
 def solarize(image, rng, *, threshold, apply_prob):

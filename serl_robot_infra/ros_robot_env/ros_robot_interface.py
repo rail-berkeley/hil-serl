@@ -109,6 +109,7 @@ class RobotRosInterface:
         self.cv_bridge = CvBridge()
         self.rgb_cam_dict = config.CAMERAS
         self.depth_cam_dict = config.DEPTH_CAMERAS
+        self.classifier=config.cls_keys[0]
 
         self.init_pub_sub_node()
         print("Initialized Agilex")
@@ -220,10 +221,21 @@ class RobotRosInterface:
             if key in self.config.IMAGE_CROP
             else cv_image
         )
-        #TODO(Chao): resize in robot env
+       
         resized = cv2.resize(cropped_rgb, (128, 128))
         self.wrist_img[key] = resized
-
+         #TODO(jq): split to cls crop and obs crop
+        if key == self.classifier:
+           key += "cls"
+        cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
+        cropped_rgb = (
+            self.config.IMAGE_CROP[key](cv_image)
+            if key in self.config.IMAGE_CROP
+            else cv_image
+        )
+        resized = cv2.resize(cropped_rgb, (128, 128))
+        self.wrist_img[key] = resized
+        # print("dict wrist_img now have 5 imgs")
     def depth_img_callback(self, image, key):
         cv_image = self.cv_bridge.imgmsg_to_cv2(image, desired_encoding="passthrough")
         cropped_rgb = (

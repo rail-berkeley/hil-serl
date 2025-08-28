@@ -538,7 +538,7 @@ def main(_):
     env = config.get_environment(
         fake_env=FLAGS.learner,
         save_video=FLAGS.save_video,
-        classifier= False,
+        classifier= True,
     )
     env = RecordEpisodeStatistics(env)
     print(f"env observe space {env.observation_space}")

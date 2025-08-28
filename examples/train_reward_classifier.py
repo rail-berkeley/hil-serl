@@ -14,21 +14,20 @@ from serl_launcher.data.data_store import ReplayBuffer
 from serl_launcher.utils.train_utils import concat_batches
 from serl_launcher.vision.data_augmentations import batched_random_crop
 from serl_launcher.networks.reward_classifier import create_classifier
-
+from serl_launcher.utils.launcher import make_batch_augmentation_func
 from experiments.mappings import CONFIG_MAPPING
 
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
-flags.DEFINE_integer("num_epochs", 150, "Number of training epochs.")
+flags.DEFINE_integer("num_epochs", 300, "Number of training epochs.")
 flags.DEFINE_integer("batch_size", 256, "Batch size.")
 
 
 def main(_):
     assert FLAGS.exp_name in CONFIG_MAPPING, 'Experiment folder not found.'
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    env = config.get_environment(fake_env=True, save_video=False, classifier=False)
-
+    env = config.get_environment(fake_env=True, save_video=False, classifier=False,sample=True)
     devices = jax.local_devices()
     sharding = jax.sharding.PositionalSharding(devices)
     
@@ -39,7 +38,8 @@ def main(_):
         capacity=20000,
         include_label=True,
     )
-
+    # for k, v in env.observation_space.spaces.items():
+    #     print(f"{k}: {v.shape}")
     search_path = os.path.join(os.getcwd(), "classifier_data", "*success*.pkl")
     success_paths = glob.glob(search_path)
     print(f"search path {search_path}")
@@ -47,12 +47,15 @@ def main(_):
     for path in success_paths:
         success_data = pkl.load(open(path, "rb"))
         for trans in success_data:
+            # obs = trans['observations']
+            # print(f"Transitionkeys: {list(obs.keys())}")
             if "images" in trans['observations'].keys():
                 continue
             trans["labels"] = 1
             trans['actions'] = env.action_space.sample()
-            trans['observations']['state'].resize((1,13)) # = trans['observations']['state'][:, :13]
-            trans['next_observations']['state'].resize((1,13))
+            # print("we have shape",trans['observations']['state'].shape)
+            trans['observations']['state'].resize((1,23)) # = trans['observations']['state'][:, :13]
+            trans['next_observations']['state'].resize((1,23))
             #print(f"trans obs {trans['observations']}")
             #print(trans)
             pos_buffer.insert(trans)
@@ -71,6 +74,7 @@ def main(_):
         capacity=50000,
         include_label=True,
     )
+    
     failure_paths = glob.glob(os.path.join(os.getcwd(), "classifier_data", "*failure*.pkl"))
     for path in failure_paths:
         failure_data = pkl.load(
@@ -82,13 +86,13 @@ def main(_):
             #print(trans)
             trans["labels"] = 0
             trans['actions'] = env.action_space.sample()
-            trans['observations']['state'].resize((1, 13)) # = trans['observations']['state'][:13]
-            trans['next_observations']['state'].resize((1, 13))
+            trans['observations']['state'].resize((1, 23)) # = trans['observations']['state'][:13]
+            trans['next_observations']['state'].resize((1, 23))
             neg_buffer.insert(trans)
             
     neg_iterator = neg_buffer.get_iterator(
         sample_args={
-            "batch_size": FLAGS.batch_size // 2,
+            "batch_size": FLAGS.batch_size// 2,
         },
         device=sharding.replicate(),
     )
@@ -101,23 +105,24 @@ def main(_):
     pos_sample = next(pos_iterator)
     neg_sample = next(neg_iterator)
     sample = concat_batches(pos_sample, neg_sample, axis=0)
-
+    print(f'Sample keys: {sample["observations"].keys()}')
     rng, key = jax.random.split(rng)
     classifier = create_classifier(key, 
                                    sample["observations"], 
                                    config.classifier_keys,
                                    )
 
-    def data_augmentation_fn(rng, observations):
-        for pixel_key in config.classifier_keys:
-            observations = observations.copy(
-                add_or_replace={
-                    pixel_key: batched_random_crop(
-                        observations[pixel_key], rng, padding=4, num_batch_dims=2
-                    )
-                }
-            )
-        return observations
+    # def data_augmentation_fn(rng, observations):
+    #     for pixel_key in config.classifier_keys:
+    #         observations = observations.copy(
+    #             add_or_replace={
+    #                 pixel_key: batched_random_crop(
+    #                     observations[pixel_key], rng, padding=4, num_batch_dims=2
+    #                 )
+    #             }
+    #         )
+    #     return observations
+    augment_batch=make_batch_augmentation_func(config.classifier_keys)
 
     @jax.jit
     def train_step(state, batch, key):
@@ -145,16 +150,16 @@ def main(_):
             pos_sample, neg_sample, axis=0
         )
         rng, key = jax.random.split(rng)
-        obs = data_augmentation_fn(key, batch["observations"])
-        batch = batch.copy(
+        batch_aug = augment_batch(batch,key)
+        batch_modify= batch.copy(
             add_or_replace={
-                "observations": obs,
+                "observations": batch_aug["observations"],
                 "labels": batch["labels"][..., None],
             }
         )
             
         rng, key = jax.random.split(rng)
-        classifier, train_loss, train_accuracy = train_step(classifier, batch, key)
+        classifier, train_loss, train_accuracy = train_step(classifier, batch_modify, key)
 
         print(
             f"Epoch: {epoch+1}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}"

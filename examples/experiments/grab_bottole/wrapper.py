@@ -555,7 +555,7 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         obs, rew, done, truncated, info = self.env.step(new_action)
         if replaced:
             info["intervene_action"] = new_action
-        print(f"has_interved {replaced}")
+        # print(f"has_interved {replaced}")
         done = done or self.has_done
         rew = max(rew, 1 if self.has_success else 0)
         return obs, rew, done, truncated, info

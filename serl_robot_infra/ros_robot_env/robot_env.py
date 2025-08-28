@@ -161,7 +161,7 @@ class RobotRosEnv(gym.Env):
                 "images": gym.spaces.Dict(
                     {
                         key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
-                        for key in {**config.CAMERAS, **config.DEPTH_CAMERAS}
+                        for key in {**config.CAMERAS, **config.DEPTH_CAMERAS,**config.CLS_CAMERAS}
                     }
                 ),
             }
@@ -272,23 +272,23 @@ class RobotRosEnv(gym.Env):
         ob = self._get_obs()
         reward = self.compute_reward(ob)
         done = (
-            self.curr_path_length >= self.max_episode_length or reward or self.terminate
+            self.curr_path_length >= self.max_episode_length or self.terminate
         )
         # print(ob,'*'*200000)
         return ob, int(reward), done, False, {"succeed": reward}
 
     def compute_reward(self, obs):
-        print(f"compute reward in env")
+        # print(f"compute reward in env")
         # current_pose = obs["state"]["tcp_pose"]
         # if self.robot.grip_status == 2 and current_pose[2] > self.resetpos[2]:
         #     return 1
         # return 0
 
-        if check_by_lsusb(TARGET_DEVICE):
-            print(f"USB device inserted")
+        current_pose = obs["state"]["tcp_pose"]
+        if current_pose[2] < 0.05:
             return 1
-        else:
-            return 0
+        return 0
+
 
         # """基于图像亮度判断U盘插入成功"""
         # print(f"compute reward in env")
@@ -471,7 +471,7 @@ class RobotRosEnv(gym.Env):
     def _get_obs(self) -> dict:
         obs = self.robot.get_obs()
         if self.display_image:
-            display_key = ['wrist', 'wrist2']
+            display_key = ['wrist', 'wrist2','wrist2cls']
             dis_images = {}
             for key in display_key:
                 if key in obs['images'].keys():
