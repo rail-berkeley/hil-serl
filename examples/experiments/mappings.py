@@ -9,16 +9,7 @@
 # from experiments.object_handover_agilex.config import (
 #    TrainConfig as ObjectHandoverAgilexTrainConfig,
 # )
-from experiments.grab_bottole.config import TrainConfig as GrabBottoleAgilexTrainConfig
-#from experiments.grab_bottole_sim.config import TrainConfig as GrabBottoleSimTrainConfig
-from experiments.move_cup_realman.config import TrainConfig as MoveCupRealmanTrainConfig
-from experiments.lift_cup.config import TrainConfig as LiftCupTrainConfig
-from experiments.place_power_bank.config import TrainConfig as PlacePowerBankTrainConfig
-from experiments.pick_pen.config import TrainConfig as PickPenTrainConfig
-from experiments.insert_battery.config import TrainConfig as InsertBatteryTrainConfig
-from experiments.insert_powerbank.config import TrainConfig as InsertPowerbankTrainConfig
-from experiments.grab_earphone.config import TrainConfig as GrabEarphoneTrainingConfig
-from experiments.insert_usb.config import TrainConfig as InsertUsbTrainingConfig
+
 from experiments.plugcable.config import TrainConfig as plug_cableTrainingConfig
 
 CONFIG_MAPPING = {
@@ -28,15 +19,6 @@ CONFIG_MAPPING = {
     # "egg_flip": EggFlipTrainConfig,
     #"object_handover_sim": ObjectHandoverSimTrainConfig,
     # "object_handover_agilex": ObjectHandoverAgilexTrainConfig,
-    "grab_bottole": GrabBottoleAgilexTrainConfig,
-    "move_cup": MoveCupRealmanTrainConfig,
-    "lift_cup": LiftCupTrainConfig,
-    "place_power_bank": PlacePowerBankTrainConfig,
-    "pick_pen": PickPenTrainConfig,
-    "insert_battery": InsertBatteryTrainConfig,
-    "insert_powerbank": InsertPowerbankTrainConfig,
-    "grab_earphone": GrabEarphoneTrainingConfig,
-    "insert_usb": InsertUsbTrainingConfig,
     "plug_cable": plug_cableTrainingConfig
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

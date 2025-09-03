@@ -5,7 +5,6 @@ import numpy as np
 import gymnasium as gym
 import cv2
 import copy
-from scipy.spatial.transform import Rotation
 from scipy.spatial.transform import Slerp
 import time
 import requests
@@ -16,14 +15,15 @@ from collections import OrderedDict
 from typing import Dict
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
-
 # 添加ROS相关导入
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 from ros_robot_env.ros_robot_interface import RobotRosInterface
-from experiments.insert_usb.usb_detector import check_by_lsusb, TARGET_DEVICE
+from scipy.spatial.transform import Rotation as R
+from scipy.interpolate import interp1d
+
 
 
 class ImageDisplayer(threading.Thread):
@@ -161,7 +161,7 @@ class RobotRosEnv(gym.Env):
                 "images": gym.spaces.Dict(
                     {
                         key: gym.spaces.Box(0, 255, shape=(128, 128, 3), dtype=np.uint8)
-                        for key in {**config.CAMERAS, **config.DEPTH_CAMERAS,**config.CLS_CAMERAS}
+                        for key in {**config.CAMERAS, **config.DEPTH_CAMERAS}
                     }
                 ),
             }
@@ -204,7 +204,7 @@ class RobotRosEnv(gym.Env):
         )
 
         
-        euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
+        euler = R.from_quat(pose[3:]).as_euler("xyz")
         if any(np.abs(euler) > np.pi):
            print(f"big euler {euler}")
         # print(
@@ -225,12 +225,19 @@ class RobotRosEnv(gym.Env):
                 self.rpy_bounding_box.high[0],
             )
         )
-
-        euler[1:] = np.clip(
-            euler[1:], self.rpy_bounding_box.low[1:], self.rpy_bounding_box.high[1:]
+        euler[1] = np.clip(
+            euler[1], self.rpy_bounding_box.low[1], self.rpy_bounding_box.high[1]
+        )
+        sign2 = np.sign(euler[2])
+        euler[2] = sign2 * (
+            np.clip(
+                np.abs(euler[2]),
+                self.rpy_bounding_box.low[2],
+                self.rpy_bounding_box.high[2],
+            )
         )
         # print(f"cliped euler: {euler}")
-        pose[3:] = Rotation.from_euler("xyz", euler).as_quat()
+        pose[3:] = R.from_euler("xyz", euler).as_quat()
 
         return pose
 
@@ -250,8 +257,8 @@ class RobotRosEnv(gym.Env):
             ## GET ORIENTATION FROM ACTION
             # euler_zxy = np.array([action[5], action[3], action[4]])
             self.nextpos[3:] = (
-                Rotation.from_euler("xyz", action[3:6] * self.action_scale[1])
-                * Rotation.from_quat(self.nextpos[3:])
+                R.from_euler("xyz", action[3:6] * self.action_scale[1])
+                * R.from_quat(self.nextpos[3:])
             ).as_quat()
 
             gripper_action = action[6] * self.action_scale[2]
@@ -267,149 +274,165 @@ class RobotRosEnv(gym.Env):
 
         self.curr_path_length += 1
         dt = time.time() - start_time
-        time.sleep(max(0, (1.0 / self.hz) - dt))
-        # print(f"actual pos: {self.curr_end_pos}")
+        
+        time.sleep(max(0, (1.0 / self.hz) - dt-0.03))
         ob = self._get_obs()
         reward = self.compute_reward(ob)
         done = (
             self.curr_path_length >= self.max_episode_length or self.terminate
         )
         # print(ob,'*'*200000)
-        return ob, int(reward), done, False, {"succeed": reward}
+        return ob, int(reward), False, done, {"succeed": reward}
 
     def compute_reward(self, obs):
-        # print(f"compute reward in env")
-        # current_pose = obs["state"]["tcp_pose"]
-        # if self.robot.grip_status == 2 and current_pose[2] > self.resetpos[2]:
-        #     return 1
-        # return 0
-
+      
         current_pose = obs["state"]["tcp_pose"]
-        if current_pose[2] < 0.05:
+        if current_pose[2] < 0.0496:
             return 1
         return 0
 
 
-        # """基于图像亮度判断U盘插入成功"""
-        # print(f"compute reward in env")
 
-        # if self.new_camera_image is None:
-        #     # print("Warning: No image data from new camera")
-        #     return 0
+    # def interpolate_move(self, goal: np.ndarray, timeout: float):
+    #     """Move the robot to the goal position with linear interpolation."""
+    #     if goal.shape == (6,):
+    #         goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
+    #         print("pos+quat",goal)
+    #     key_times = [0, 1]
+    #     key_rots = R.from_quat([self.robot.curr_end_pos[3:], goal[3:]])
+    #     slerp = Slerp(key_times, key_rots)
+    #     steps = int(timeout * self.hz)
+    #     interpolate_times = np.linspace(0, 1, steps)
+    #     path_slerp = slerp(interpolate_times)
+    #     path_slerp = [rot.as_quat() for rot in path_slerp]
+    #     path = np.linspace(self.robot.curr_end_pos, goal, steps)
+    #     for idx, p in enumerate(path):
+    #         p[3:] = path_slerp[idx]
+    #         # print(f"reset p {path_slerp[idx]}")
+    #         self.robot.send_pos_command(p)
+    #         time.sleep(1 / self.hz)
+    #     self.nextpos = p
 
-        # image = self.new_camera_image.copy()
 
-        # roi = (325, 324, 401, 391)  # (x1, y1, x2, y2) 根据实际红色方框位置调整
+    # def go_to_reset(self, joint_reset=False):
+    #     """
+    #     The concrete steps to perform reset should be
+    #     implemented each subclass for the specific task.
+    #     Should override this method if custom reset procedure is needed.
+    #     """
+    #     # self.robot.send_gripper_command(1)
+    #     self.robot.send_gripper_command(-1)
+    #     # Perform joint reset if needed
+    #     if joint_reset:
+    #         print("JOINT RESET")
+    #         JOINT_RESET = [0, 0, 1.570, 0, 1.57, 0]
+    #         self.robot.send_joint_command(JOINT_RESET)
+    #         time.sleep(1.5)
+    #         return
 
-        # success_detected = False
-        # brightness_threshold = 300  # 根据实际情况调整阈值
-
-        # # 转换为灰度图
-        # if len(image.shape) == 3:
-        #     gray = np.dot(image[...,:3], [0.299, 0.587, 0.114])
-        # else:
-        #     gray = image
-
-        # # 确保坐标在图像范围内
-        # h, w = gray.shape
-        # x1, y1, x2, y2 = roi
-        # x1, y1 = max(0, x1), max(0, y1)
-        # x2, y2 = min(w, x2), min(h, y2)
-
-        # # 提取ROI区域并计算平均亮度
-        # roi_region = gray[y1:y2, x1:x2]
-        # if roi_region.size > 0:
-        #     roi_brightness = np.mean(roi_region)
-        #     print(f"ROI brightness: {roi_brightness:.2f} (threshold: {brightness_threshold})")
-        #     print(f"Image shape: {gray.shape}, ROI coordinates: ({x1}, {y1}, {x2}, {y2}), ROI shape: {roi_region.shape}")
-
-        #     # 如果ROI区域亮度超过阈值，认为成功
-        #     if roi_brightness > brightness_threshold:
-        #         print(f"SUCCESS DETECTED!  roi_brightness: {roi_brightness:.2f}")
-        #         success_detected = True
-        # else:
-        #     print(f"Warning: ROI is empty")
-
-        # return 1 if success_detected else 0
-
-        # convert from quat to euler first
-        # current_rot = Rotation.from_quat(current_pose[3:]).as_matrix()
-        # target_rot = Rotation.from_euler("xyz", self._TARGET_POSE[3:]).as_matrix()
-        # diff_rot = current_rot.T @ target_rot
-        # diff_euler = Rotation.from_matrix(diff_rot).as_euler("xyz")
-        # delta = np.abs(
-        #    np.hstack([current_pose[:3] - self._TARGET_POSE[:3], diff_euler])
-        # )
-        ## print(f"Delta: {delta}")
-        # if np.all(delta < self._REWARD_THRESHOLD):
-        #    return True
-        # else:
-        #    # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
-        #    return False
-
-    def interpolate_move(self, goal: np.ndarray, timeout: float):
-        """Move the robot to the goal position with linear interpolation."""
-        if goal.shape == (6,):
-            goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
-            print("pos+quat",goal)
-        key_times = [0, 1]
-        key_rots = Rotation.from_quat([self.robot.curr_end_pos[3:], goal[3:]])
-        slerp = Slerp(key_times, key_rots)
-        steps = int(timeout * self.hz)
-        interpolate_times = np.linspace(0, 1, steps)
-        path_slerp = slerp(interpolate_times)
-        path_slerp = [rot.as_quat() for rot in path_slerp]
-        path = np.linspace(self.robot.curr_end_pos, goal, steps)
-        for idx, p in enumerate(path):
-            p[3:] = path_slerp[idx]
-            # print(f"reset p {path_slerp[idx]}")
-            self.robot.send_pos_command(p)
-            time.sleep(1 / self.hz)
-        self.nextpos = p
-
-    def go_to_reset(self, joint_reset=False):
-        """
-        The concrete steps to perform reset should be
-        implemented each subclass for the specific task.
-        Should override this method if custom reset procedure is needed.
-        """
-        # self.robot.send_gripper_command(1)
-        self.robot.send_gripper_command(-1)
-        # Perform joint reset if needed
-        if joint_reset:
-            print("JOINT RESET")
-            JOINT_RESET = [0, 0, 1.570, 0, 1.57, 0]
-            self.robot.send_joint_command(JOINT_RESET)
-            time.sleep(1.5)
-            return
-
-        # 先提高z轴到安全高度
-        # current_pos = self.robot.curr_end_pos.copy()
-        # safe_height_pose = current_pos.copy()
-        # safe_height_pose[2] = max(current_pos[2] + 0.03, self.resetpos[2] + 0.01)  # 提高3cm或比重置位置高1cm
-        # print(f"First lifting to safe height: {safe_height_pose[:3]}")
-        # self.interpolate_move(safe_height_pose, timeout=1)
-        # time.sleep(1)  # 等待提升完成
-
-        # Perform Carteasian reset
-        if self.randomreset:  # randomize reset position in xy plane
-            reset_pose = self.resetpos.copy()
-            reset_pose[:2] += np.random.uniform(
-                -self.random_xy_range, self.random_xy_range, (2,)
-            )
-            euler_random = self._RESET_POSE[3:].copy()
-            euler_random[-1] += np.random.uniform(
-                -self.random_rz_range, self.random_rz_range
-            )
-            reset_pose[3:] = euler_2_quat(euler_random)
-            self.interpolate_move(reset_pose, timeout=1)
-        else:
-            reset_pose = self.resetpos.copy()
-            self.interpolate_move(reset_pose, timeout=2)
-        time.sleep(1)
+    #     current_pos = self.robot.curr_end_pos.copy()
+    #     safe_height_pose = current_pos.copy()
+    #     alpha=0.5
+    #     safe_height_pose[2] = (1-alpha)*self.resetpos[2]+alpha*current_pos[2]
+    #     safe_height_pose[4] = self.resetpos[4]
+    #     print(f"First lifting to safe height: {safe_height_pose[:3]}")
+    #     self.interpolate_move(safe_height_pose, timeout=0.4)
+    #     # Perform Carteasian reset
+    #     if self.randomreset:  # randomize reset position in xy plane
+    #         reset_pose = self.resetpos.copy()
+    #         reset_pose[:2] += np.random.uniform(
+    #             -self.random_xy_range, self.random_xy_range, (2,)
+    #         )
+    #         euler_random = self._RESET_POSE[3:].copy()
+    #         euler_random[-1] += np.random.uniform(
+    #             -self.random_rz_range, self.random_rz_range
+    #         )
+    #         reset_pose[3:] = euler_2_quat(euler_random)
+    #         self.interpolate_move(reset_pose, timeout=1)
+    #     else:
+    #         reset_pose = self.resetpos.copy()
+    #         self.interpolate_move(reset_pose, timeout=2)
+    #     time.sleep(0.2)
 
         # Change to compliance mode
         # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+
+# 四元数姿态调整辅助函数
+    def adjust_quaternion_pitch(self,quat, target_pitch,target_roll):
+        """调整四元数到目标pitch角，保持roll和yaw不变"""
+        r = R.from_quat(quat)
+        __annotations__, _, yaw = r.as_euler('xyz')
+        return R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
+
+    def interpolate_move(self, waypoints, timeout=2.0):
+        """多关键点平滑插值运动，支持多个旋转关键点的球面插值"""
+        waypoints = np.array(waypoints)
+        if waypoints.shape[1] != 7:  # 确保是 [x,y,z,qx,qy,qz,qw] 格式
+            raise ValueError("姿态必须是7维数组 [x,y,z,qx,qy,qz,qw]")
+
+        steps = int(timeout * self.hz)
+        t = np.linspace(0, 1, steps)
+        
+        # 位置插值
+        pos_traj = interp1d(np.linspace(0, 1, len(waypoints)), waypoints[:, :3], kind='cubic', axis=0)(t)
+        
+        # 旋转插值 - 使用正确的scipy R方法
+        Rs = R.from_quat(waypoints[:, 3:])
+        
+        for i in range(steps):
+            pos = pos_traj[i]
+            
+            # 使用R类的Slerp方法
+            if len(Rs) == 1:
+                rot = Rs[0]
+            else:
+                # 创建Slerp对象进行插值
+                key_times = np.linspace(0, 1, len(Rs))
+                slerps = Slerp(key_times, Rs)
+                rot = slerps(t[i])
+            
+            self.robot.send_pos_command(np.concatenate([pos, rot.as_quat()]))
+            time.sleep(1/self.hz)
+    def go_to_reset(self, joint_reset=False):
+        """优先重置逻辑实现：先恢复pitch角，然后恢复z坐标，最后完整reset"""
+        if joint_reset:
+            # 关节空间重置
+            self.robot.send_joint_command(self.RESET_JOINT_POSITIONS)
+            time.sleep(2.0)
+            return
+        
+        current_pose = self.robot.curr_end_pos.copy()
+        print("current_pose",current_pose)
+        reset_pose = self._RESET_POSE
+        target_roll=self._RESET_POSE[3]
+        target_pitch=self._RESET_POSE[4]
+        reset_pose_quat = R.from_euler('xyz', reset_pose[3:]).as_quat()  # 7维目标姿态
+        reset_pose=np.concatenate([reset_pose[:3],reset_pose_quat])
+        
+        
+        # 定义关键路径点 - 体现优先级
+        waypoints = [
+             # 第一步：优先调整pitch角（保持x,y,z不变）
+            np.concatenate([
+                [current_pose[0], current_pose[1], current_pose[2]], 
+                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+            ]),
+            np.concatenate([
+                [current_pose[0], current_pose[1], current_pose[2]+0.04],
+                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+            ]),
+              
+            # 第二步：调整z坐标（保持x,y和调整后的姿态不变）
+            np.concatenate([
+                [current_pose[0], current_pose[1], reset_pose[2]],
+                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+            ]),
+            
+            # 第三步：完整调整到reset姿态
+            reset_pose
+        ]
+        
+        self.interpolate_move(waypoints, timeout=2.0)
 
     def reset(self, joint_reset=False, **kwargs):
         self.last_gripper_act = time.time()
@@ -471,7 +494,7 @@ class RobotRosEnv(gym.Env):
     def _get_obs(self) -> dict:
         obs = self.robot.get_obs()
         if self.display_image:
-            display_key = ['wrist', 'wrist2','wrist2cls']
+            display_key = ['wrist', 'wrist2','side']
             dis_images = {}
             for key in display_key:
                 if key in obs['images'].keys():

@@ -21,7 +21,7 @@ from experiments.mappings import CONFIG_MAPPING
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("num_epochs", 300, "Number of training epochs.")
-flags.DEFINE_integer("batch_size", 256, "Batch size.")
+flags.DEFINE_integer("batch_size",512 , "Batch size.")
 
 
 def main(_):
@@ -112,7 +112,7 @@ def main(_):
                                    config.classifier_keys,
                                    )
 
-    # def data_augmentation_fn(rng, observations):
+    # def augment_batch(rng, observations):
     #     for pixel_key in config.classifier_keys:
     #         observations = observations.copy(
     #             add_or_replace={

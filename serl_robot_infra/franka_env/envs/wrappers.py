@@ -9,6 +9,8 @@ import requests
 from scipy.spatial.transform import Rotation as R
 from franka_env.envs.franka_env import FrankaEnv
 from typing import List
+from ultralytics import YOLO
+import cv2
 
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
@@ -39,11 +41,10 @@ class MultiCameraBinaryRewardClassifierWrapper(gym.Wrapper):
     which is not part of the observation space
     """
 
-    def __init__(self, env: Env, reward_classifier_func, target_hz = None):
+    def __init__(self, env: Env, target_hz = 5):
         super().__init__(env)
-        self.reward_classifier_func = reward_classifier_func
         self.target_hz = target_hz
-
+        self.model = YOLO("/home/amigo/jiaqi/yolov/runs/classify/train/weights/best.pt")
     def compute_reward(self, obs):
         if self.reward_classifier_func is not None:
             return self.reward_classifier_func(obs)
@@ -52,12 +53,21 @@ class MultiCameraBinaryRewardClassifierWrapper(gym.Wrapper):
     def step(self, action):
         start_time = time.time()
         obs, rew, done, truncated, info = self.env.step(action)
-        predrew=self.compute_reward(obs)
-        print(f"predicted reward is {predrew}")
-        rew = min(predrew, rew)
-        print(f"total reward is{rew}")
-        # rew = self.compute_reward(obs)
-        done = rew
+         
+        # success, img = cv2.imencode('.jpg', image_array)
+        # start_time1 = time.time()
+        results = self.model(obs["side"][0])
+        # tim=time.time()-start_time1
+        # print("yolov11 cost",tim)
+        predicted_label = results[0].names[results[0].probs.top1]  # 这才是字符串
+
+        if predicted_label == "success":
+            predrew = 1
+        else:
+            predrew = 0
+        
+        rew = min(predrew,rew)
+        done = done or truncated or rew>0
         info['succeed'] = bool(rew)
         if self.target_hz is not None:
             time.sleep(max(0, 1/self.target_hz - (time.time() - start_time)))

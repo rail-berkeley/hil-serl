@@ -64,12 +64,14 @@ def create_classifier(
         )
         for image_key in image_keys
     }
+   
     encoder_def = EncodingWrapper(
         encoder=encoders,
         use_proprio=False,
         enable_stacking=True,
         image_keys=image_keys,
     )
+    
     if n_way == 2:
         classifier_def = BinaryClassifier(encoder_def=encoder_def)
     else:

@@ -9,8 +9,69 @@ serl_robot_infra/franka_env/spacemouse/__pycache__
 serl_robot_infra/*/__pycache__
 franka_sim/franka_sim/.DS_Store    
 examples/experiments/*/first_run*/
+examples/experiments/*/first_*/
 examples/experiments/*/demo_data*/
 examples/experiments/*/wandb/
 __pycache__
 examples/experiments/*/__pycache__/
-actions/
+.marscode/deviceInfo.json
+# 缓存和编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+*.egg
+
+# 日志文件
+MUJOCO_LOG.TXT
+*.log
+*.logs
+
+# 系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 实验数据
+first_run*/
+first_*/
+demo_data*/
+
+# 机器学习相关
+wandb/
+.marscode/deviceInfo.json
+
+# 特定路径
+examples/experiments/*/__pycache__/
+examples/experiments/*/first_run*/
+examples/experiments/*/first_*/
+examples/experiments/*/demo_data*/
+examples/experiments/*/wandb/
+serl_robot_infra/*/__pycache__/
