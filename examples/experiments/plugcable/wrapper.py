@@ -21,11 +21,6 @@ from scipy.spatial.transform import Rotation as R
 from agilex_env.agilex_env import AgilexEnv, DefaultEnvConfig
 
 from gym import Env
-from experiments.object_handover_agilex.transformers import (
-    construct_adjoint_matrix,
-    construct_homogeneous_matrix,
-)
-
 import ctypes
 import posix_ipc
 import mmap
@@ -588,12 +583,12 @@ class ExpertIntervWrapper(gym.ActionWrapper):
             if key.char == 's':
                 print(f"set success {self.has_success}")
                 self.has_success = True 
-            if key.char == 'o':
-                print("open gripper")
-                self._lift_and_open_gripper()
-            if key.char == 'p':
-                print("close gripper")
-                self._close_gripper_and_reset()
+            # if key.char == 'o':
+            #     print("open gripper")
+            #     self._lift_and_open_gripper()
+            # if key.char == 'p':
+            #     print("close gripper")
+            #     self._close_gripper_and_reset()
         except AttributeError:
             print(f"特殊按键: {key}")
 

@@ -4,10 +4,11 @@ export WANDB_ENTITY=724183484zz@gmail.com
 export WANDB_API_KEY=cbacbd4d69837b2f36b650e8682607b8910fa76c
 python ../../train_rlpd.py "$@" \
     --exp_name=plug_cable \
-    --checkpoint_path=first_cable\
+    --checkpoint_path=second_plug\
     --demo_path=... \
     --actor \
-    --eval_checkpoint_step=45000 \
+    --eval_checkpoint_step=63000 \
     --eval_n_trajs=100 \
 
+    
 

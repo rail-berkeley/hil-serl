@@ -287,7 +287,7 @@ class RobotRosEnv(gym.Env):
     def compute_reward(self, obs):
       
         current_pose = obs["state"]["tcp_pose"]
-        if current_pose[2] < 0.0496:
+        if current_pose[2] < 0.0490:
             return 1
         return 0
 

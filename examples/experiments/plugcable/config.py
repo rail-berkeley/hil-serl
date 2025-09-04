@@ -49,7 +49,7 @@ class RightEnvConfig(DefaultEnvConfig):
     # CLS_CAMERAS = {
     #     "wrist2cls": "/2/camera/color/image_raw", 
     # }
-    RESET_POSE = np.array([0.57, -0.03, 0.156, -np.pi+0.0001, 0.0, -0.999*np.pi])
+    RESET_POSE = np.array([0.57, -0.03, 0.156, -np.pi+0.07, 0.0, -0.999*np.pi])
     ABS_POSE_LIMIT_LOW = np.array([0.49, -0.11, -0.1, np.pi-0.1, -0.05, np.pi-0.3])
     ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.08, 0.176, np.pi, 0.05, np.pi])
     gripper_open = 600
