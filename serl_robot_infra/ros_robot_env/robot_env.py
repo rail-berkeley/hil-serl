@@ -188,6 +188,8 @@ class RobotRosEnv(gym.Env):
         if not fake_env:
             self._init_new_camera_subscriber()
 
+        self.robot.reset_robot_force_config()
+
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
         # print(

@@ -25,6 +25,8 @@ from std_msgs.msg import Header
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
 
+from dobot_controller.srv import ConfigForce
+
 
 class ImageDisplayer(threading.Thread):
     def __init__(self, queue, name):
@@ -113,6 +115,27 @@ class RobotRosInterface:
 
         self.init_pub_sub_node()
         print("Initialized Agilex")
+
+    def reset_robot_force_config(self):
+        try:
+            fc_mode = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            fc_mass = [100, 100, 20, 10, 20, 20]
+            fc_damping = [600, 600, 600, 100, 100, 100]
+            fc_stiffness = [400, 400, 500, 1, 1, 1]
+            fc_speed = [200, 200, 200, 3, 3, 3]
+            gripper_force = 20
+            if hasattr(self.config, 'FORCE_PARAM'):
+                fc_mode = self.config.FORCE_PARAM['fc_mode']
+                fc_mass = self.config.FORCE_PARAM['fc_mass']
+                fc_damping = self.config.FORCE_PARAM['fc_damping']
+                fc_stiffness = self.config.FORCE_PARAM['fc_stiffness']
+                fc_speed = self.config.FORCE_PARAM['fc_speed']
+                gripper_force = self.config.FORCE_PARAM['gripper_force']
+            config_force = rospy.ServiceProxy('/set_force_param', ConfigForce)
+            resp = config_force(fc_mode=fc_mode, fc_mass=fc_mass, fc_damping=fc_damping, fc_stiffness=fc_stiffness, fc_speed=fc_speed, gripper_force=gripper_force) 
+            print("Success:", resp.res)
+        except rospy.ServiceException as e:
+            print("Service call failed:", e)
 
     def init_pub_sub_node(self):
         print("Init node")
