@@ -41,10 +41,11 @@ class MultiCameraBinaryRewardClassifierWrapper(gym.Wrapper):
     which is not part of the observation space
     """
 
-    def __init__(self, env: Env, target_hz = 5):
+    def __init__(self, env: Env, model_path: str, target_hz: int = 5):
         super().__init__(env)
         self.target_hz = target_hz
-        self.model = YOLO("/home/amigo/jiaqi/yolov/runs/classify/train/weights/best.pt")
+        self.model_path = model_path
+        self.model = YOLO(model_path)
     def compute_reward(self, obs):
         if self.reward_classifier_func is not None:
             return self.reward_classifier_func(obs)

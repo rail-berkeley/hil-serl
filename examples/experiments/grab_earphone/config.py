@@ -45,7 +45,7 @@ class RightEnvConfig(DefaultEnvConfig):
         "wrist2_depth": lambda img: img[0:450, 150:750],
     }
 
-    Z_OFFSET = -0.036
+    Z_OFFSET = 0.136
     RESET_POSE = np.array([0.53, 0.051, 0.100 + Z_OFFSET, 3.14, 0.0, -1.57])
     ABS_POSE_LIMIT_LOW = np.array([0.50, 0.01, 0.055 + Z_OFFSET, 3.12, -0.10, -3.14])
     ABS_POSE_LIMIT_HIGH = np.array([0.574, 0.086, 0.102 + Z_OFFSET, 3.15, 0.10, 0])
@@ -58,48 +58,13 @@ class RightEnvConfig(DefaultEnvConfig):
     MAX_EPISODE_LENGTH = 100
 
 
-    GRIPPER_SLEEP = 1.0
-    COMPLIANCE_PARAM = {
-        "translational_stiffness": 2000,
-        "translational_damping": 89,
-        "rotational_stiffness": 120,
-        "rotational_damping": 5,
-        "translational_Ki": 0,
-        "translational_clip_x": 0.0085,
-        "translational_clip_y": 0.005,
-        "translational_clip_z": 0.005,
-        "translational_clip_neg_x": 0.007,
-        "translational_clip_neg_y": 0.005,
-        "translational_clip_neg_z": 0.006,
-        "rotational_clip_x": 0.02,
-        "rotational_clip_y": 0.03,
-        "rotational_clip_z": 0.02,
-        "rotational_clip_neg_x": 0.02,
-        "rotational_clip_neg_y": 0.03,
-        "rotational_clip_neg_z": 0.02,
-        "rotational_Ki": 0,
+    FORCE_PARAM = {
+      'fc_mode': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      'fc_mass' : [100, 100, 20, 10, 20, 20],
+      'fc_damping' : [600, 600, 600, 100, 100, 100],
+      'fc_stiffness' : [400, 400, 500, 1, 1, 1],
+      'fc_speed' : [200, 200, 200, 3, 3, 3],
     }
-    PRECISION_PARAM = {
-        "translational_stiffness": 2000,
-        "translational_damping": 89,
-        "rotational_stiffness": 120,
-        "rotational_damping": 5,
-        "translational_Ki": 0,
-        "translational_clip_x": 0.02,
-        "translational_clip_y": 0.01,
-        "translational_clip_z": 0.01,
-        "translational_clip_neg_x": 0.02,
-        "translational_clip_neg_y": 0.01,
-        "translational_clip_neg_z": 0.01,
-        "rotational_clip_x": 0.04,
-        "rotational_clip_y": 0.04,
-        "rotational_clip_z": 0.04,
-        "rotational_clip_neg_x": 0.04,
-        "rotational_clip_neg_y": 0.04,
-        "rotational_clip_neg_z": 0.04,
-        "rotational_Ki": 0,
-    }
-
 
 class TrainConfig(DefaultTrainingConfig):
     image_keys = ["wrist2","wrist2_depth", "wrist_depth",  "wrist"]

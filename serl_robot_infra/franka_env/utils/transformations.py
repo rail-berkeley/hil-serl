@@ -70,3 +70,40 @@ def construct_homogeneous_matrix_from_euler(tcp_pose, order="xyz"):
     T[3, 3] = 1
     return T
 
+def calculate_tool_tip_with_matrix(current_pose, tool_length=0.152):
+    """
+    使用齐次变换矩阵计算工具末端位置
+    
+    参数:
+        current_pose: [x, y, z, qx, qy, qz, qw] - TCP位姿
+        tool_length: 工具长度
+    
+    返回:
+        tool_tip_pose: [x, y, z, qx, qy, qz, qw] - 工具末端位姿
+    """
+    # 提取位置和四元数
+    position = np.array(current_pose[:3])
+    quaternion = np.array(current_pose[3:])
+    
+    # 创建旋转矩阵
+    rotation = R.from_quat(quaternion)
+    Rm = rotation.as_matrix()
+    
+    # 构建齐次变换矩阵 T_tcp_base (TCP相对于基座标系)
+    T_tcp_base = np.eye(4)
+    T_tcp_base[:3, :3] = Rm
+    T_tcp_base[:3, 3] = position
+    
+    # 构建工具末端的变换矩阵 T_tool_tcp (工具末端相对于TCP)
+    T_tool_tcp = np.eye(4)
+    T_tool_tcp[2, 3] = tool_length  # 沿TCP的Z轴平移
+    
+    # 计算工具末端相对于基座标系的变换矩阵
+    T_tool_base = T_tcp_base @ T_tool_tcp
+    
+    # 提取工具末端的位置和姿态
+    tool_tip_position = T_tool_base[:3, 3]
+    tool_tip_rotation = R.from_matrix(T_tool_base[:3, :3])
+    tool_tip_quat = tool_tip_rotation.as_quat()  # [x, y, z, w] 格式
+    
+    return np.concatenate([tool_tip_position, tool_tip_quat])

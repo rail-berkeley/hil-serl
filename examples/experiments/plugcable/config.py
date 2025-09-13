@@ -63,6 +63,14 @@ class RightEnvConfig(DefaultEnvConfig):
     MAX_EPISODE_LENGTH = 150
 
 
+    FORCE_PARAM = {
+      'fc_mode': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      'fc_mass' : [100, 100, 20, 10, 20, 20],
+      'fc_damping' : [600, 600, 600, 100, 100, 100],
+      'fc_stiffness' : [400, 400, 500, 1, 1, 1],
+      'fc_speed' : [200, 200, 200, 3, 3, 3],
+      'gripper_force': 60
+    }
     GRIPPER_SLEEP = 1.0
     COMPLIANCE_PARAM = {
         "translational_stiffness": 2000,
@@ -140,7 +148,11 @@ class TrainConfig(DefaultTrainingConfig):
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
         if classifier and self.classifier_keys is not None:
-            env = MultiCameraBinaryRewardClassifierWrapper(env)
+            env = MultiCameraBinaryRewardClassifierWrapper(
+                env=env,
+                model_path="/home/amigo/jiaqi/yolov/runs/classify/train/weights/best.pt",
+                target_hz=5
+            )
         if not fake_env:
             env = ExpertIntervWrapper(env)
         if not sample:

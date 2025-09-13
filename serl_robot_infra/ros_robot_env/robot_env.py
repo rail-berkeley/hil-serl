@@ -15,6 +15,7 @@ from collections import OrderedDict
 from typing import Dict
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
+from franka_env.utils.transformations import calculate_tool_tip_with_matrix
 # 添加ROS相关导入
 import rospy
 from sensor_msgs.msg import Image
@@ -42,7 +43,7 @@ class ImageDisplayer(threading.Thread):
 
             frame = np.concatenate(
                 [
-                    cv2.resize(v, (128, 128))
+                    cv2.resize(v, (256, 256))
                     for k, v in img_array.items()
                     if "full" not in k
                 ],
@@ -188,7 +189,7 @@ class RobotRosEnv(gym.Env):
         if not fake_env:
             self._init_new_camera_subscriber()
 
-        self.robot.reset_robot_force_config()
+        # self.robot.reset_robot_force_config()
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
@@ -252,6 +253,7 @@ class RobotRosEnv(gym.Env):
         # print(f"current pos in step: {self.nextpos}")
         # self.nextpos[:3] = actioin[:3]
         # self.nextpos[3:] = euler_2_quat(action[3:6])
+        
         try:
             action = np.clip(action, -1.0, 1.0)
             xyz_delta = action[:3]
@@ -273,7 +275,9 @@ class RobotRosEnv(gym.Env):
                 self.robot.send_pos_command(cliped_pos)
         except Exception as e:
             print(f"calculate action error {action}, exception {e}")
-
+        # print("action", xyz_delta)
+        # print("current pos", self.robot.curr_end_pos)
+        # print("goal pos", cliped_pos)
         self.curr_path_length += 1
         dt = time.time() - start_time
         
@@ -287,9 +291,11 @@ class RobotRosEnv(gym.Env):
         return ob, int(reward), False, done, {"succeed": reward}
 
     def compute_reward(self, obs):
-      
-        current_pose = obs["state"]["tcp_pose"]
-        if current_pose[2] < 0.0490:
+        tool_tip_pose = calculate_tool_tip_with_matrix(obs["state"]["tcp_pose"])
+        # # if tool_tip_pose[1] < 0.02308:
+        # #     return 1
+        print(f"tool tip pose: {tool_tip_pose}")
+        if np.abs(tool_tip_pose[0] - 0.6705) < 0.01:
             return 1
         return 0
 
@@ -420,7 +426,7 @@ class RobotRosEnv(gym.Env):
                 self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
             ]),
             np.concatenate([
-                [current_pose[0], current_pose[1], current_pose[2]+0.04],
+                [current_pose[0], current_pose[1]+0.01, current_pose[2]],
                 self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
             ]),
               
@@ -452,6 +458,7 @@ class RobotRosEnv(gym.Env):
             joint_reset = True
 
         self.go_to_reset(joint_reset=joint_reset)
+        self.robot.reset_robot_force_config()
         self.curr_path_length = 0
 
         obs = self._get_obs()

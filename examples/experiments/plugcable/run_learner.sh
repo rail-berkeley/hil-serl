@@ -1,7 +1,7 @@
 export XLA_PYTHON_CLIENT_PREALLOCATE=false && \
 export XLA_PYTHON_CLIENT_MEM_FRACTION=.3 && \
-export WANDB_ENTITY=724183484zz@gmail.com
-export WANDB_API_KEY=cbacbd4d69837b2f36b650e8682607b8910fa76c
+export WANDB_ENTITY=zjq19990202@gmail.com
+export WANDB_API_KEY=0a88034024ec899c79a9809b84c3a4f01c8b191d
 python ../../train_rlpd.py "$@" \
     --exp_name=plug_cable \
     --checkpoint_path=second_plug \

@@ -10,7 +10,7 @@
 #    TrainConfig as ObjectHandoverAgilexTrainConfig,
 # )
 
-from experiments.plugcable.config import TrainConfig as plug_cableTrainingConfig
+from experiments.plugusb.config import TrainConfig as plug_usbTrainingConfig
 
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
@@ -19,6 +19,6 @@ CONFIG_MAPPING = {
     # "egg_flip": EggFlipTrainConfig,
     #"object_handover_sim": ObjectHandoverSimTrainConfig,
     # "object_handover_agilex": ObjectHandoverAgilexTrainConfig,
-    "plug_cable": plug_cableTrainingConfig
+    "plug_usb": plug_usbTrainingConfig,
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

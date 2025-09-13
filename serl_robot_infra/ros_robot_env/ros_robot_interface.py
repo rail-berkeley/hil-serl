@@ -119,11 +119,11 @@ class RobotRosInterface:
     def reset_robot_force_config(self):
         try:
             fc_mode = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            fc_mass = [100, 100, 20, 10, 20, 20]
+            fc_mass = [500, 500, 500, 10, 20, 20]
             fc_damping = [600, 600, 600, 100, 100, 100]
-            fc_stiffness = [400, 400, 500, 1, 1, 1]
+            fc_stiffness = [400, 600, 400, 1, 1, 1]
             fc_speed = [200, 200, 200, 3, 3, 3]
-            gripper_force = 20
+            gripper_force = 60
             if hasattr(self.config, 'FORCE_PARAM'):
                 fc_mode = self.config.FORCE_PARAM['fc_mode']
                 fc_mass = self.config.FORCE_PARAM['fc_mass']
