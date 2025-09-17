@@ -139,7 +139,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             while not done:
                 sampling_rng, key = jax.random.split(sampling_rng)
                 actions, _ = agent.sample_actions(
-                    observations=jax.device_put(obs), argmax=False, seed=key
+                    observations=jax.device_put(obs), argmax=True, seed=key
                 )
                 actions = np.asarray(jax.device_get(actions))
 
@@ -252,8 +252,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 already_intervened = True
             else:
                 already_intervened = False
-
-            running_return += reward
+            running_return += reward+info["grasp_penalty"]+info["jitter_penalty"]
             transition = dict(
                 observations=obs,
                 actions=actions,
@@ -266,6 +265,10 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 transition["grasp_penalty"] = info["grasp_penalty"]
             else:
                 print_green("no grasp_penalty")
+            if "jitter_penalty" in info:
+                transition["jitter_penalty"] = info["jitter_penalty"]
+            else:
+                print_green("no jitter_penalty")
             data_store.insert(transition)
             transitions.append(copy.deepcopy(transition))
             if already_intervened:
@@ -372,7 +375,7 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     # 50/50 sampling from RLPD, half from demo and half from online experience
     replay_iterator = replay_buffer.get_iterator(
         sample_args={
-            "batch_size": config.batch_size // 2,
+            "batch_size": config.batch_size ,
             "pack_obs_and_next_obs": True,
         },
         device=sharding.replicate(),
@@ -617,6 +620,7 @@ def main(_):
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
+            include_jitter_penalty=True,
         )
         # set up wandb and logging
         wandb_logger = make_wandb_logger(
@@ -642,6 +646,7 @@ def main(_):
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
+            include_jitter_penalty=True,
         )
 
         # assert FLAGS.demo_path is not None

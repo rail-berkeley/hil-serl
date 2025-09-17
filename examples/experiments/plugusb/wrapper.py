@@ -139,7 +139,7 @@ class DualAgilexEnv(AgilexEnv):
         return ob
 
 class ForcePenaltyWrapper(gym.Wrapper):
-    def __init__(self, env, thresh=10, penalty_coef=1e-3, max_penalty=0.05):
+    def __init__(self, env, thresh=20, penalty_coef=1e-3, max_penalty=0.05):
         '''
         - force_threshold: float, acceptable force magnitude threshold
         - penalty_coef: float, penalty scaling factor (lambda)
@@ -177,8 +177,8 @@ class ForcePenaltyWrapper(gym.Wrapper):
         penalty = self.compute_penalty(force_vector)
         # reward *= 100
         reward += penalty
-        print(f"reward: {reward}")
         return observation, reward, terminated, truncated, info
+
     
 class TimePenaltyWrapper(gym.Wrapper):
     def __init__(self, env):
@@ -247,7 +247,7 @@ class GripperPenaltyWrapper(gym.Wrapper):
         return observation, reward, terminated, truncated, info
 
 class JitterPenaltyWrapper(gym.Wrapper):
-    def __init__(self, env, penalty_coef=0.03, max_penalty=0.005, history_length=5):
+    def __init__(self, env, penalty_coef=0.04, max_penalty=0.01, history_length=5):
         """
         抖动惩罚包装器
         
@@ -260,57 +260,67 @@ class JitterPenaltyWrapper(gym.Wrapper):
         self.penalty_coef = penalty_coef
         self.max_penalty = max_penalty
         self.history_length = history_length
-        self.action_history = deque(maxlen=history_length)
+        self.tcp_vel_history = deque(maxlen=history_length)
 
-    def compute_jitter_penalty(self, current_action):
+    def compute_jitter_penalty(self, current_tcp_vel):
         """
         计算抖动惩罚
         
         Returns:
         - penalty: float, 抖动惩罚值（负数）
         """
-        if len(self.action_history) < 2:
+        if len(self.tcp_vel_history) < 2:
             return 0.0
         
         penalty = 0.0
         
         # 1. 动作变化率惩罚（检测动作的突然变化）
-        if len(self.action_history) >= 2:
-            action_diff1 = np.array(current_action) - np.array(self.action_history[-1])
-            pos_diff = np.linalg.norm(action_diff1[:3]) * 10
-            ori_diff = np.linalg.norm(action_diff1[3:6]) * 1
-
-            action_jerk = pos_diff + ori_diff
-            print("jerk is",action_jerk)
-            # 动作抖动惩罚
-            if action_jerk > 0.1:  # 阈值可以调整
-                penalty += self.penalty_coef * action_jerk
-       
+        if len(self.tcp_vel_history) >= 2:
+            vel_diff1 = np.array(current_tcp_vel) - np.array(self.tcp_vel_history[-1])
+            pos_diff = np.linalg.norm(vel_diff1[:3]) * 4
+            ori_diff = np.linalg.norm(vel_diff1[3:6]) * 0.8
+            print("pos diff is",pos_diff)
+            print("ori diff is",ori_diff)
+            if pos_diff > 0.02:  # 阈值可以调整
+                penalty += self.penalty_coef * pos_diff
+            if ori_diff > 0.02:  # 阈值可以调整
+                penalty += self.penalty_coef * ori_diff
         penalty = min(self.max_penalty, penalty)*(-1)
         return penalty
 
     def step(self, action):
-        observation, reward, terminated, truncated, info = self.env.step(action)
-        action1 = action.copy()
-        action1[:3] *= 0.01  # 前3个动作缩放0.01
-        action1[3:6] *= 0.05
-        jitter_penalty = self.compute_jitter_penalty(action1)
-        print("action jitter penalty is",jitter_penalty)
-        self.action_history.append(action1)
-        reward += jitter_penalty
+        observation, rew, terminated, truncated, info = self.env.step(action)
+        if hasattr(self.env, 'curr_end_vel'):
+            current_tcp_vel = self.env.curr_end_vel
+        else:
+            if "state" in observation:
+                if "tcp_vel" in observation["state"]:
+                    current_tcp_vel = observation["state"]["tcp_vel"]
+                elif "left/tcp_vel" in observation["state"]:
+                    current_tcp_vel = observation["state"]["left/tcp_vel"]
+                else:
+                    current_tcp_vel = np.zeros(6)
+            else:
+                current_tcp_vel = np.zeros(6)
         
+        # 计算抖动惩罚
+        jitter_penalty = self.compute_jitter_penalty(current_tcp_vel)
+        # rew += jitter_penalty
+        self.tcp_vel_history.append(current_tcp_vel.copy())
         # 添加调试信息
         if "jitter_penalty" not in info:
             info["jitter_penalty"] = jitter_penalty
+
         
-        return observation, reward, terminated, truncated, info
+        return observation, rew, terminated, truncated, info
     
     def reset(self, **kwargs):
         """重置时清空历史记录"""
-        self.action_history.clear()
+        # self.action_history.clear()
         # self.tcp_pos_history.clear()
-        # self.tcp_vel_history.clear()
+        self.tcp_vel_history.clear()
         return self.env.reset(**kwargs)
+
 
 
 
@@ -749,6 +759,6 @@ class ExpertIntervWrapper(gym.ActionWrapper):
         elif self.has_done:
             rew = 0
         
-        done = done or self.has_done or rew>0
+        done = done or self.has_done or rew>0 or truncated
 
         return obs, rew, done, truncated, info

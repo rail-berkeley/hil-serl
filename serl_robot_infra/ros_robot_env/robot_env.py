@@ -291,12 +291,12 @@ class RobotRosEnv(gym.Env):
         return ob, int(reward), False, done, {"succeed": reward}
 
     def compute_reward(self, obs):
-        tool_tip_pose = calculate_tool_tip_with_matrix(obs["state"]["tcp_pose"])
-        # # if tool_tip_pose[1] < 0.02308:
-        # #     return 1
-        print(f"tool tip pose: {tool_tip_pose}")
-        if np.abs(tool_tip_pose[0] - 0.6705) < 0.01:
-            return 1
+        #tool_tip_pose = calculate_tool_tip_with_matrix(obs["state"]["tcp_pose"])
+        ## # if tool_tip_pose[1] < 0.02308:
+        ## #     return 1
+        #print(f"tool tip pose: {tool_tip_pose}")
+        #if np.abs(tool_tip_pose[0] - 0.6705) < 0.01:
+        #    return 1
         return 0
 
 

@@ -20,11 +20,12 @@ from franka_env.envs.wrappers import (
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import Quat2EulerWrapper
 
-USE_FORCE_PENALTY =False
+USE_FORCE_PENALTY =True
 USE_TIME_PENALTY = True
 USE_JITTER_PENALTY = True
 
 class RightEnvConfig(DefaultEnvConfig):
+    TASK = "plugcable"
     ARM = "dobot"
     CAMERAS = {
         "wrist": "/1/camera/color/image_raw", # "/camera_r/color/image_raw",
@@ -39,25 +40,25 @@ class RightEnvConfig(DefaultEnvConfig):
     IMAGE_CROP = {
         # "side": lambda img: img[0:480, 120:600],
         #"wrist": lambda img: img[0:400, 130:530],
-        "wrist": lambda img: img[250:450, 350:650],
-        "wrist2": lambda img: img[0:350, 350:750],
-        "side": lambda img: img[150:550,400:800],
-        "wrist_depth": lambda img: img[250:450, 350:650],
-        "wrist2_depth": lambda img: img[0:350, 350:750],
+        "wrist": lambda img: img[180:330, 350:600],
+        "wrist2": lambda img: img[180:330, 380:650],
+        "side": lambda img: img[600:820,800:1040],
+        "wrist_depth": lambda img: img[180:380, 300:600],
+        "wrist2_depth": lambda img: img[180:380, 300:600],  
     }
     # cls_keys = ["wrist2"]
     # CLS_CAMERAS = {
     #     "wrist2cls": "/2/camera/color/image_raw", 
     # }
-    RESET_POSE = np.array([0.57, -0.03, 0.156, -np.pi+0.07, 0.0, -0.999*np.pi])
-    ABS_POSE_LIMIT_LOW = np.array([0.49, -0.11, -0.1, np.pi-0.1, -0.05, np.pi-0.3])
-    ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.08, 0.176, np.pi, 0.05, np.pi])
-    gripper_open = 600
-    gripper_close = 120
+    RESET_POSE = np.array([0.61, -0.031, 0.245, -np.pi, 0.03, np.pi])
+    ABS_POSE_LIMIT_LOW = np.array([0.57, -0.07, 0.209, np.pi-0.05, -0.05, np.pi-0.2])
+    ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.01, 0.255, np.pi, 0.11, np.pi])
+    gripper_open = 600    
+    gripper_close = 75
 
     RANDOM_RESET = True
-    RANDOM_XY_RANGE = 0.02
-    RANDOM_RZ_RANGE = 0
+    RANDOM_XY_RANGE = 0.01
+    RANDOM_RZ_RANGE = 0.02
     ACTION_SCALE = (0.01, 0.05, 1)
     DISPLAY_IMAGE = True
     MAX_EPISODE_LENGTH = 150
@@ -65,11 +66,11 @@ class RightEnvConfig(DefaultEnvConfig):
 
     FORCE_PARAM = {
       'fc_mode': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      'fc_mass' : [100, 100, 20, 10, 20, 20],
-      'fc_damping' : [600, 600, 600, 100, 100, 100],
-      'fc_stiffness' : [400, 400, 500, 1, 1, 1],
-      'fc_speed' : [200, 200, 200, 3, 3, 3],
-      'gripper_force': 60
+      'fc_mass' : [20, 20, 20, 200, 100, 200],
+      'fc_damping' : [600, 600, 600, 600, 600, 600],
+      'fc_stiffness' : [400, 400, 400, 400, 400, 400],
+      'fc_speed' : [200, 200, 200, 200, 200, 200],
+      'gripper_force': 50
     }
     GRIPPER_SLEEP = 1.0
     COMPLIANCE_PARAM = {
@@ -132,7 +133,7 @@ class TrainConfig(DefaultTrainingConfig):
     setup_mode = "single-arm-learned-gripper"
 
     def get_environment(self, fake_env=False, save_video=False, classifier=True,sample=False):
-        env = RobotRosEnv(
+        env = RobotRosEnv    (
             hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         if USE_JITTER_PENALTY:
@@ -150,7 +151,7 @@ class TrainConfig(DefaultTrainingConfig):
         if classifier and self.classifier_keys is not None:
             env = MultiCameraBinaryRewardClassifierWrapper(
                 env=env,
-                model_path="/home/amigo/jiaqi/yolov/runs/classify/train/weights/best.pt",
+                model_path="/home/amigo/jiaqi/yolov/runs/classify/train5/weights/best.pt",
                 target_hz=5
             )
         if not fake_env:
@@ -158,7 +159,7 @@ class TrainConfig(DefaultTrainingConfig):
         if not sample:
            env = RemoveImageKeyWrapper(env, keys_to_remove=self.classifier_keys[0])
         # env = GripperPenaltyWrapper(env, penalty=-0.02)
-        env = GripperPenaltyWrapper(env, penalty=0)
+        env = GripperPenaltyWrapper(env, penalty=-0.02)
         if USE_FORCE_PENALTY:
             env = ForcePenaltyWrapper(env)
         if USE_TIME_PENALTY:

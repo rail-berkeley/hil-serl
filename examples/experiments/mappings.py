@@ -11,6 +11,7 @@
 # )
 
 from experiments.plugusb.config import TrainConfig as plug_usbTrainingConfig
+from experiments.plugcable.config import TrainConfig as plug_cableTrainingConfig
 
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
@@ -20,5 +21,6 @@ CONFIG_MAPPING = {
     #"object_handover_sim": ObjectHandoverSimTrainConfig,
     # "object_handover_agilex": ObjectHandoverAgilexTrainConfig,
     "plug_usb": plug_usbTrainingConfig,
+    "plug_cable": plug_cableTrainingConfig,
     #"grab_bottole_sim": GrabBottoleSimTrainConfig,
 }

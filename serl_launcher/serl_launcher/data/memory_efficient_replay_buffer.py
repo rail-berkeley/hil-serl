@@ -18,6 +18,7 @@ class MemoryEfficientReplayBuffer(ReplayBuffer):
         pixel_keys: Tuple[str, ...] = ("pixels",),
         include_next_actions: Optional[bool] = False,
         include_grasp_penalty: Optional[bool] = False,
+        include_jitter_penalty: Optional[bool] = False,
     ):
         self.pixel_keys = pixel_keys
 
@@ -52,6 +53,7 @@ class MemoryEfficientReplayBuffer(ReplayBuffer):
             next_observation_space=next_observation_space,
             include_next_actions=include_next_actions,
             include_grasp_penalty=include_grasp_penalty,
+            include_jitter_penalty=include_jitter_penalty,
         )
 
     def insert(self, data_dict: DatasetDict):
@@ -165,3 +167,4 @@ class MemoryEfficientReplayBuffer(ReplayBuffer):
                     batch["next_observations"][pixel_key] = obs_pixels[:, 1:, ...]
 
         return frozen_dict.freeze(batch)
+

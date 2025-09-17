@@ -70,13 +70,14 @@ def construct_homogeneous_matrix_from_euler(tcp_pose, order="xyz"):
     T[3, 3] = 1
     return T
 
-def calculate_tool_tip_with_matrix(current_pose, tool_length=0.152):
+def calculate_tool_tip_with_matrix(current_pose, tool_length=0.152, x_offset=0.01):
     """
-    使用齐次变换矩阵计算工具末端位置
+    使用齐次变换矩阵计算工具末端位置，并额外加上工具的X正方向偏移
     
     参数:
         current_pose: [x, y, z, qx, qy, qz, qw] - TCP位姿
-        tool_length: 工具长度
+        tool_length: 工具长度（沿TCP的Z轴方向）
+        x_offset: 工具X正方向的额外偏移量
     
     返回:
         tool_tip_pose: [x, y, z, qx, qy, qz, qw] - 工具末端位姿
@@ -95,8 +96,9 @@ def calculate_tool_tip_with_matrix(current_pose, tool_length=0.152):
     T_tcp_base[:3, 3] = position
     
     # 构建工具末端的变换矩阵 T_tool_tcp (工具末端相对于TCP)
+    # 先沿TCP的Z轴平移tool_length，再沿TCP的X轴平移x_offset
     T_tool_tcp = np.eye(4)
-    T_tool_tcp[2, 3] = tool_length  # 沿TCP的Z轴平移
+    T_tool_tcp[:3, 3] = [x_offset, 0, tool_length]  # [x, y, z] 偏移
     
     # 计算工具末端相对于基座标系的变换矩阵
     T_tool_base = T_tcp_base @ T_tool_tcp
