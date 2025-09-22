@@ -50,11 +50,11 @@ class RightEnvConfig(DefaultEnvConfig):
     # CLS_CAMERAS = {
     #     "wrist2cls": "/2/camera/color/image_raw", 
     # }
-    RESET_POSE = np.array([0.670, 0.222, 0.258, -np.pi, 0.0, 0.5*np.pi])
-    ABS_POSE_LIMIT_LOW = np.array([0.640, 0.202, 0.200, np.pi-0.05, -0.02, 0.5*np.pi-0.1])
-    ABS_POSE_LIMIT_HIGH = np.array([0.700, 0.242, 0.288, np.pi, 0.02, 0.5*np.pi+0.1])
-    gripper_open = 600
-    gripper_close = 30
+    RESET_POSE = np.array([0.680, 0.222, 0.258, -np.pi, 0.0, 0.5*np.pi])
+    ABS_POSE_LIMIT_LOW = np.array([0.60, 0.18, 0.180, np.pi-0.05, -0.02, 0.5*np.pi-0.1])
+    ABS_POSE_LIMIT_HIGH = np.array([0.74, 0.27, 0.288, np.pi, 0.02, 0.5*np.pi+0.1])
+    gripper_open = 450
+    gripper_close = 80
 
     RANDOM_RESET = True
     RANDOM_XY_RANGE = 0.01
@@ -116,6 +116,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
+    RESET_POSE = np.array([0.68, 0.222, 0.258, -np.pi, 0.0, 0.5*np.pi])
     image_keys = ["wrist2","wrist2_depth", "wrist_depth",  "wrist"]
     classifier_keys = ["side","wrist2","wrist2_depth", "wrist_depth",  "wrist"]
     proprio_keys = [

@@ -1,20 +1,3 @@
-examples/experiments/object_handover_sim/MUJOCO_LOG.TXT
-examples/experiments/__pycache__
-serl_robot_infra/agilex_env/__pycache__
-serl_robot_infra/franka_env/utils/__pycache__
-serl_robot_infra/serl_robot_infra.egg-info
-serl_robot_infra/franka_env/camera/__pycache__
-serl_robot_infra/franka_env/envs/__pycache__
-serl_robot_infra/franka_env/spacemouse/__pycache__
-serl_robot_infra/*/__pycache__
-franka_sim/franka_sim/.DS_Store    
-examples/experiments/*/first_run*/
-examples/experiments/*/first_*/
-examples/experiments/*/demo_data*/
-examples/experiments/*/wandb/
-__pycache__
-examples/experiments/*/__pycache__/
-.marscode/deviceInfo.json
 # 缓存和编译文件
 __pycache__/
 *.py[cod]
@@ -37,6 +20,7 @@ pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 *.egg
+.jix_cache/
 
 # 日志文件
 MUJOCO_LOG.TXT
@@ -58,15 +42,16 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.marscode
 
 # 实验数据
 first_run*/
 first_*/
 demo_data*/
+ckpt_*/
 
 # 机器学习相关
 wandb/
-.marscode/deviceInfo.json
 
 # 特定路径
 examples/experiments/*/__pycache__/

@@ -115,7 +115,11 @@ class RobotRosInterface:
 
         self.init_pub_sub_node()
         print("Initialized Agilex")
-
+    
+    
+    @property
+    def curr_ep(self):
+        return self.curr_end_pos
     def reset_robot_force_config(self):
         try:
             fc_mode = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]

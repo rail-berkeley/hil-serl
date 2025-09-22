@@ -53,7 +53,7 @@ class RightEnvConfig(DefaultEnvConfig):
     RESET_POSE = np.array([0.61, -0.031, 0.245, -np.pi, 0.03, np.pi])
     ABS_POSE_LIMIT_LOW = np.array([0.57, -0.07, 0.209, np.pi-0.05, -0.05, np.pi-0.2])
     ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.01, 0.255, np.pi, 0.11, np.pi])
-    gripper_open = 600    
+    gripper_open = 450   
     gripper_close = 75
 
     RANDOM_RESET = True
@@ -116,6 +116,7 @@ class RightEnvConfig(DefaultEnvConfig):
 
 
 class TrainConfig(DefaultTrainingConfig):
+    RESET_POSE = np.array([0.61, -0.031, 0.245, -np.pi, 0.03, np.pi])
     image_keys = ["wrist2","wrist2_depth", "wrist_depth",  "wrist"]
     classifier_keys = ["side","wrist2","wrist2_depth", "wrist_depth",  "wrist"]
     proprio_keys = [

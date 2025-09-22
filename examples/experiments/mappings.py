@@ -13,6 +13,7 @@
 from experiments.plugusb.config import TrainConfig as plug_usbTrainingConfig
 from experiments.plugcable.config import TrainConfig as plug_cableTrainingConfig
 
+
 CONFIG_MAPPING = {
     # "ram_insertion": RAMInsertionTrainConfig,
     # "usb_pickup_insertion": USBPickupInsertionTrainConfig,

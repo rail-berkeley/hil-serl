@@ -15,7 +15,7 @@ from collections import OrderedDict
 from typing import Dict
 from colorama import Fore, Style
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
-from franka_env.utils.transformations import calculate_tool_tip_with_matrix
+from franka_env.utils.transformations import calculate_offset_toolcoordinate
 # 添加ROS相关导入
 import rospy
 from sensor_msgs.msg import Image
@@ -178,7 +178,6 @@ class RobotRosEnv(gym.Env):
         if fake_env:
             return
         self.display_img_id = 0
-        print("Initialized Agilex")
 
         # 初始化用于新相机的变量
         self.new_camera_image = None
@@ -188,20 +187,45 @@ class RobotRosEnv(gym.Env):
         # 只在非fake环境中初始化相机订阅
         if not fake_env:
             self._init_new_camera_subscriber()
-
+        self.terminate=False
         # self.robot.reset_robot_force_config()
+    def update_config(self, config: DefaultEnvConfig):
+        """
+        Update the environment's config and reassign relevant properties.
+        """
+        self.config = config
+        self.action_scale = config.ACTION_SCALE
+        self._TARGET_POSE = config.TARGET_POSE
+        self._RESET_POSE = config.RESET_POSE
+        self._REWARD_THRESHOLD = config.REWARD_THRESHOLD
+        self.max_episode_length = config.MAX_EPISODE_LENGTH
+        self.display_image = config.DISPLAY_IMAGE
+        self.resetpos = np.concatenate(
+            [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
+        )
+        self.randomreset = config.RANDOM_RESET
+        self.random_xy_range = config.RANDOM_XY_RANGE
+        self.random_rz_range = config.RANDOM_RZ_RANGE # Update hz from the config (optional)
+        self.joint_reset_cycle = config.JOINT_RESET_PERIOD
 
+        # Boundary box updates
+        self.xyz_bounding_box = gym.spaces.Box(
+            config.ABS_POSE_LIMIT_LOW[:3],
+            config.ABS_POSE_LIMIT_HIGH[:3],
+            dtype=np.float64,
+        )
+        self.rpy_bounding_box = gym.spaces.Box(
+            config.ABS_POSE_LIMIT_LOW[3:],
+            config.ABS_POSE_LIMIT_HIGH[3:],
+            dtype=np.float64,
+        )
+
+        self.robot = RobotRosInterface(config)
+        if self.save_video:
+            self.recording_frames = []
+        self.terminate
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
-        # print(
-        #    Fore.RED
-        #    + f" {self.xyz_bounding_box.low} "
-        #    + Fore.BLUE
-        #    + f" {pose[:3]} "
-        #    + Fore.RED
-        #    + f" {self.xyz_bounding_box.high}"
-        #    + Style.RESET_ALL
-        # )
         pose[:3] = np.clip(
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
@@ -210,16 +234,6 @@ class RobotRosEnv(gym.Env):
         euler = R.from_quat(pose[3:]).as_euler("xyz")
         if any(np.abs(euler) > np.pi):
            print(f"big euler {euler}")
-        # print(
-        #    Fore.RED
-        #    + f" {self.rpy_bounding_box.low} "
-        #    + Fore.BLUE
-        #    + f" {euler} "
-        #    + Fore.RED
-        #    + f" {self.rpy_bounding_box.high}"
-        #    + Style.RESET_ALL
-        # )
-        # Clip first euler angle separately due to discontinuity from pi to -pi
         sign = np.sign(euler[0])
         euler[0] = sign * (
             np.clip(
@@ -239,7 +253,6 @@ class RobotRosEnv(gym.Env):
                 self.rpy_bounding_box.high[2],
             )
         )
-        # print(f"cliped euler: {euler}")
         pose[3:] = R.from_euler("xyz", euler).as_quat()
 
         return pose
@@ -250,16 +263,11 @@ class RobotRosEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.robot.curr_end_pos.copy()
-        # print(f"current pos in step: {self.nextpos}")
-        # self.nextpos[:3] = actioin[:3]
-        # self.nextpos[3:] = euler_2_quat(action[3:6])
         
         try:
             action = np.clip(action, -1.0, 1.0)
             xyz_delta = action[:3]
             self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
-            ## GET ORIENTATION FROM ACTION
-            # euler_zxy = np.array([action[5], action[3], action[4]])
             self.nextpos[3:] = (
                 R.from_euler("xyz", action[3:6] * self.action_scale[1])
                 * R.from_quat(self.nextpos[3:])
@@ -275,9 +283,6 @@ class RobotRosEnv(gym.Env):
                 self.robot.send_pos_command(cliped_pos)
         except Exception as e:
             print(f"calculate action error {action}, exception {e}")
-        # print("action", xyz_delta)
-        # print("current pos", self.robot.curr_end_pos)
-        # print("goal pos", cliped_pos)
         self.curr_path_length += 1
         dt = time.time() - start_time
         
@@ -287,120 +292,139 @@ class RobotRosEnv(gym.Env):
         done = (
             self.curr_path_length >= self.max_episode_length or self.terminate
         )
-        # print(ob,'*'*200000)
         return ob, int(reward), False, done, {"succeed": reward}
 
     def compute_reward(self, obs):
-        #tool_tip_pose = calculate_tool_tip_with_matrix(obs["state"]["tcp_pose"])
-        ## # if tool_tip_pose[1] < 0.02308:
-        ## #     return 1
-        #print(f"tool tip pose: {tool_tip_pose}")
-        #if np.abs(tool_tip_pose[0] - 0.6705) < 0.01:
-        #    return 1
-        return 0
+        # tool_tip_pose = calculate_tool_tip_with_matrix(obs["state"]["tcp_pose"],tool_length=0.152,x_offset=0)
+        # # if tool_tip_pose[1] < 0.02308:
+        # #     return 1
+        # print(f"tool tip pose: {tool_tip_pose}")
+        # if np.abs(tool_tip_pose[0] - 0.6805) < 0.01:
+        #     return 1
+        return 1
 
 
-
-    # def interpolate_move(self, goal: np.ndarray, timeout: float):
-    #     """Move the robot to the goal position with linear interpolation."""
-    #     if goal.shape == (6,):
-    #         goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
-    #         print("pos+quat",goal)
-    #     key_times = [0, 1]
-    #     key_rots = R.from_quat([self.robot.curr_end_pos[3:], goal[3:]])
-    #     slerp = Slerp(key_times, key_rots)
-    #     steps = int(timeout * self.hz)
-    #     interpolate_times = np.linspace(0, 1, steps)
-    #     path_slerp = slerp(interpolate_times)
-    #     path_slerp = [rot.as_quat() for rot in path_slerp]
-    #     path = np.linspace(self.robot.curr_end_pos, goal, steps)
-    #     for idx, p in enumerate(path):
-    #         p[3:] = path_slerp[idx]
-    #         # print(f"reset p {path_slerp[idx]}")
-    #         self.robot.send_pos_command(p)
-    #         time.sleep(1 / self.hz)
-    #     self.nextpos = p
-
-
-    # def go_to_reset(self, joint_reset=False):
-    #     """
-    #     The concrete steps to perform reset should be
-    #     implemented each subclass for the specific task.
-    #     Should override this method if custom reset procedure is needed.
-    #     """
-    #     # self.robot.send_gripper_command(1)
-    #     self.robot.send_gripper_command(-1)
-    #     # Perform joint reset if needed
-    #     if joint_reset:
-    #         print("JOINT RESET")
-    #         JOINT_RESET = [0, 0, 1.570, 0, 1.57, 0]
-    #         self.robot.send_joint_command(JOINT_RESET)
-    #         time.sleep(1.5)
-    #         return
-
-    #     current_pos = self.robot.curr_end_pos.copy()
-    #     safe_height_pose = current_pos.copy()
-    #     alpha=0.5
-    #     safe_height_pose[2] = (1-alpha)*self.resetpos[2]+alpha*current_pos[2]
-    #     safe_height_pose[4] = self.resetpos[4]
-    #     print(f"First lifting to safe height: {safe_height_pose[:3]}")
-    #     self.interpolate_move(safe_height_pose, timeout=0.4)
-    #     # Perform Carteasian reset
-    #     if self.randomreset:  # randomize reset position in xy plane
-    #         reset_pose = self.resetpos.copy()
-    #         reset_pose[:2] += np.random.uniform(
-    #             -self.random_xy_range, self.random_xy_range, (2,)
-    #         )
-    #         euler_random = self._RESET_POSE[3:].copy()
-    #         euler_random[-1] += np.random.uniform(
-    #             -self.random_rz_range, self.random_rz_range
-    #         )
-    #         reset_pose[3:] = euler_2_quat(euler_random)
-    #         self.interpolate_move(reset_pose, timeout=1)
-    #     else:
-    #         reset_pose = self.resetpos.copy()
-    #         self.interpolate_move(reset_pose, timeout=2)
-    #     time.sleep(0.2)
-
-        # Change to compliance mode
-        # requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
-
-# 四元数姿态调整辅助函数
     def adjust_quaternion_pitch(self,quat, target_pitch,target_roll):
         """调整四元数到目标pitch角，保持roll和yaw不变"""
         r = R.from_quat(quat)
-        __annotations__, _, yaw = r.as_euler('xyz')
+        roll, pitch, yaw = r.as_euler('xyz')
         return R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
 
-    def interpolate_move(self, waypoints, timeout=2.0):
-        """多关键点平滑插值运动，支持多个旋转关键点的球面插值"""
+    # def interpolate_move(self, waypoints, timeout=2.0):
+    #     """多关键点平滑插值运动，支持多个旋转关键点的球面插值"""
+    #     waypoints = np.array(waypoints)
+    #     if waypoints.shape[1] != 7:  # 确保是 [x,y,z,qx,qy,qz,qw] 格式
+    #         raise ValueError("姿态必须是7维数组 [x,y,z,qx,qy,qz,qw]")
+
+    #     steps = int(timeout * self.hz)
+    #     t = np.linspace(0, 1, steps)
+        
+    #     # 位置插值
+    #     pos_traj = interp1d(np.linspace(0, 1, len(waypoints)), waypoints[:, :3], kind='cubic', axis=0)(t)
+        
+    #     # 旋转插值 - 使用正确的scipy R方法
+    #     Rs = R.from_quat(waypoints[:, 3:])
+        
+    #     for i in range(steps):
+    #         pos = pos_traj[i]
+            
+    #         # 使用R类的Slerp方法
+    #         if len(Rs) == 1:
+    #             rot = Rs[0]
+    #         else:
+    #             # 创建Slerp对象进行插值
+    #             key_times = np.linspace(0, 1, len(Rs))
+    #             slerps = Slerp(key_times, Rs)
+    #             rot = slerps(t[i])
+            
+    #         self.robot.send_pos_command(np.concatenate([pos, rot.as_quat()]))
+    #         time.sleep(1/self.hz)
+
+    
+    def interpolate_move(self, waypoints, timeout=2.0,min_segment_time=0.5):
+        """
+        多关键点平滑插值运动（纯归一化时间轴 + 权重分配）
+        :param waypoints: 关键帧列表 [[x,y,z,qx,qy,qz,qw], ...]
+        :param timeout: 总运动时间 (秒)
+        """
         waypoints = np.array(waypoints)
-        if waypoints.shape[1] != 7:  # 确保是 [x,y,z,qx,qy,qz,qw] 格式
+        if waypoints.shape[1] != 7:
             raise ValueError("姿态必须是7维数组 [x,y,z,qx,qy,qz,qw]")
 
-        steps = int(timeout * self.hz)
-        t = np.linspace(0, 1, steps)
+        # 1. 计算每段运动的平移距离和旋转角度
+        segment_distances = []
+        segment_angles = []
+        for i in range(len(waypoints) - 1):
+            # 平移距离 (米)
+            delta_pos = np.linalg.norm(waypoints[i+1, :3] - waypoints[i, :3])
+            segment_distances.append(delta_pos)
+            
+            # 旋转角度 (弧度)
+            dot = np.dot(waypoints[i, 3:], waypoints[i+1, 3:])
+            dot = np.clip(dot, -1.0, 1.0)
+            theta = 2 * np.arccos(abs(dot))
+            segment_angles.append(theta)
+
+        # 2. 计算归一化的动态时间轴（基于position×10 + rotation×2）
+        segment_time = [
+        max((d * 10) + (a * 2), min_segment_time)
+        for d, a in zip(segment_distances, segment_angles)]
+        total_time= sum(segment_time)
         
-        # 位置插值
-        pos_traj = interp1d(np.linspace(0, 1, len(waypoints)), waypoints[:, :3], kind='cubic', axis=0)(t)
-        
-        # 旋转插值 - 使用正确的scipy R方法
+        # 生成归一化的时间轴 [0, ..., 1]
+        key_times = np.cumsum([0] + segment_time) / total_time
+
+        # 3. 位置插值 (动态时间轴 + 三次样条)
+        pos_interpolator = interp1d(
+            key_times,          # 归一化的动态时间轴
+            waypoints[:, :3],   # 位置数据
+            kind='cubic',      # 平滑插值
+            axis=0
+        )
+
+        # 4. 姿态插值 (Slerp)
         Rs = R.from_quat(waypoints[:, 3:])
-        
-        for i in range(steps):
-            pos = pos_traj[i]
-            
-            # 使用R类的Slerp方法
-            if len(Rs) == 1:
-                rot = Rs[0]
-            else:
-                # 创建Slerp对象进行插值
-                key_times = np.linspace(0, 1, len(Rs))
-                slerps = Slerp(key_times, Rs)
-                rot = slerps(t[i])
-            
+        slerp = Slerp(key_times, Rs)
+
+        # 5. 生成插值点并发送指令
+        steps = int(timeout * self.hz)
+        t_eval = np.linspace(0, 1, steps)  # 归一化的插值时间轴
+        print("\n=== 调试信息 ===")
+        print("各段平移距离 (m):", np.round(segment_distances, 4))
+        print("各段旋转角度 (rad):", np.round(segment_angles, 4))
+        print("各段旋转角度 (deg):", np.round(np.degrees(segment_angles), 2))
+        print("各段权重 (position×10 + rotation×2):", np.round(segment_time, 4))
+        print("权重总和:", round(total_time, 4))
+        print("归一化时间轴 key_times:", np.round(key_times, 4))
+        print("===============\n")
+        for t in t_eval:
+            pos = pos_interpolator(t)      # 位置插值
+            rot = slerp(t)    
+            print(f"t: {t}, pos: {pos}, euler: {rot.as_euler('xyz')}")            
             self.robot.send_pos_command(np.concatenate([pos, rot.as_quat()]))
-            time.sleep(1/self.hz)
+            time.sleep(1 / self.hz)
+    def cal_timeout(self,curr, reset):
+        # 提取四元数
+        q_curr = np.array(curr[3:])
+        q_reset = np.array(reset[3:])
+        # 计算点积
+        dot_original = np.dot(q_curr, q_reset)
+        # 调整：如果点积为负，将q_reset取反
+        if dot_original < 0:
+            q_reset = -q_reset
+            dot_adjusted = -dot_original
+        else:
+            dot_adjusted = dot_original
+
+        reset[3:] = q_reset.tolist()   
+        # 计算角度差
+        dot_adjusted = np.clip(dot_adjusted, -1.0, 1.0)   # 确保在[-1,1]内
+        theta = 2 * np.arccos(dot_adjusted)
+        delta=np.linalg.norm(curr[:3]-reset[:3])
+        print(f"theta: {theta}, delta: {delta}")
+        timeout = theta*3+delta*15
+        print(f"timeout: {timeout}")
+        return np.max((timeout,2),axis=0)
     def go_to_reset(self, joint_reset=False):
         """优先重置逻辑实现：先恢复pitch角，然后恢复z坐标，最后完整reset"""
         if joint_reset:
@@ -411,36 +435,79 @@ class RobotRosEnv(gym.Env):
         
         current_pose = self.robot.curr_end_pos.copy()
         print("current_pose",current_pose)
-        reset_pose = self._RESET_POSE
-        target_roll=self._RESET_POSE[3]
-        target_pitch=self._RESET_POSE[4]
+        reset_pose = self._RESET_POSE.copy()
+        if self.randomreset:  # randomize reset position in xy plane
+            reset_pose[:2] += np.random.uniform(
+                -self.random_xy_range, self.random_xy_range, (2,)
+            )
+            reset_pose[5] += np.random.uniform(
+                -self.random_rz_range, self.random_rz_range
+            )
+        if reset_pose[3]<-np.pi:
+            reset_pose[3]+=2*np.pi
+        if reset_pose[5]>np.pi:
+            reset_pose[5]-=2*np.pi
         reset_pose_quat = R.from_euler('xyz', reset_pose[3:]).as_quat()  # 7维目标姿态
         reset_pose=np.concatenate([reset_pose[:3],reset_pose_quat])
-        
-        
-        # 定义关键路径点 - 体现优先级
-        waypoints = [
-             # 第一步：优先调整pitch角（保持x,y,z不变）
+        r = R.from_quat(current_pose[3:])
+        roll, pitch, yaw = r.as_euler('xyz')
+        if self.config.TASK=="plugusb":
+            back_pose = calculate_offset_toolcoordinate(current_pose,x_offset=0.015,z_offset=-0.005)
+            target_roll=self._RESET_POSE[3]
+            target_pitch=self._RESET_POSE[4]
+
+            # 定义关键路径点 - 体现优先级
+            waypoints = [
+                current_pose,
+                np.concatenate([
+                    [current_pose[0], current_pose[1], current_pose[2]], 
+                    R.from_euler('xyz', [roll, target_pitch, yaw]).as_quat()
+                ]),
+                np.concatenate([
+                    back_pose[:3],
+                    R.from_euler('xyz', [roll, target_pitch, yaw]).as_quat()
+                ]),
+                
+                # 第二步：调整z坐标（保持x,y和调整后的姿态不变）
+                np.concatenate([
+                    [back_pose[0], back_pose[1], reset_pose[2]],
+                    R.from_euler('xyz', [roll, target_pitch, yaw]).as_quat()
+                ]),
+                np.concatenate([
+                    [(back_pose[0]+reset_pose[0])/2, (back_pose[1]+reset_pose[1])/2, reset_pose[2]],
+                    reset_pose[3:]
+                ]),
+                # 第三步：完整调整到reset姿态
+                reset_pose
+            ]
+        if self.config.TASK=="plugcable":
+            back_pose = calculate_offset_toolcoordinate(current_pose,x_offset=0,z_offset=-0.015)
+            target_roll=self._RESET_POSE[3]
+            target_pitch=self._RESET_POSE[4]
+            waypoints = [
+            current_pose,
             np.concatenate([
                 [current_pose[0], current_pose[1], current_pose[2]], 
-                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+                R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
             np.concatenate([
-                [current_pose[0], current_pose[1]+0.01, current_pose[2]],
-                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+                back_pose[:3],
+                R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
               
             # 第二步：调整z坐标（保持x,y和调整后的姿态不变）
             np.concatenate([
-                [current_pose[0], current_pose[1], reset_pose[2]],
-                self.adjust_quaternion_pitch(current_pose[3:], target_pitch,target_roll)
+                [back_pose[0], back_pose[1], reset_pose[2]],
+                R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
             
             # 第三步：完整调整到reset姿态
             reset_pose
         ]
-        
-        self.interpolate_move(waypoints, timeout=2.0)
+
+        timeout=self.cal_timeout(current_pose,reset_pose)
+        self.interpolate_move(waypoints, timeout=timeout)
+        time.sleep(0.5)
 
     def reset(self, joint_reset=False, **kwargs):
         self.last_gripper_act = time.time()
