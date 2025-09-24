@@ -166,8 +166,6 @@ class ForcePenaltyWrapper(gym.Wrapper):
         excess_force = max(0.0, force_norm - self.thresh)
         penalty = self.penalty_coef * excess_force
         penalty = min(self.max_penalty, penalty)
-        print(f"force norm: {force_norm}")
-        print(f"force penalty: {penalty}")
         return -penalty
 
     def step(self, action):
@@ -175,8 +173,9 @@ class ForcePenaltyWrapper(gym.Wrapper):
         observation, reward, terminated, truncated, info = self.env.step(action)
         force_vector = self.env.robot.curr_force[:3]
         penalty = self.compute_penalty(force_vector)
-        # reward *= 100
-        reward += penalty
+        if "force_penalty" not in info:
+            info["force_penalty"] = penalty
+
         return observation, reward, terminated, truncated, info
 
     
@@ -247,7 +246,7 @@ class GripperPenaltyWrapper(gym.Wrapper):
         return observation, reward, terminated, truncated, info
 
 class JitterPenaltyWrapper(gym.Wrapper):
-    def __init__(self, env, penalty_coef=0.05, max_penalty=0.01, history_length=5):
+    def __init__(self, env, acc=0.03,act=0.03,max_penalty=0.005, history_length=5):
         """
         抖动惩罚包装器
         
@@ -257,12 +256,40 @@ class JitterPenaltyWrapper(gym.Wrapper):
         - history_length: int, 用于计算抖动的历史动作长度
         """
         super().__init__(env)
-        self.penalty_coef = penalty_coef
+        self.acc_coef=acc
+        self.act_coef=act
         self.max_penalty = max_penalty
         self.history_length = history_length
         self.tcp_vel_history = deque(maxlen=history_length)
+        self.action_history = deque(maxlen=history_length)
+    
+    def compute_act_penalty(self, current_action):
+            """
+            计算抖动惩罚
+            
+            Returns:
+            - penalty: float, 抖动惩罚值（负数）
+            """
+            if len(self.action_history) < 2:
+                return 0.0
+            penalty = 0.0
+            
+            # 1. 动作变化率惩罚（检测动作的突然变化）
+            if len(self.action_history) >= 2:
+                action_diff1 = np.array(current_action) - np.array(self.action_history[-1])
+                pos_diff = np.linalg.norm(action_diff1[:3]) * 10
+                ori_diff = np.linalg.norm(action_diff1[3:6]) * 1
 
-    def compute_jitter_penalty(self, current_tcp_vel):
+                action_jerk = pos_diff + ori_diff
+                print("jerk is",action_jerk)
+                # 动作抖动惩罚
+                if action_jerk > 0.1:  # 阈值可以调整
+                    penalty +=  self.act_coef* action_jerk
+        
+            penalty = min(self.max_penalty, penalty)*(-1)
+            return penalty
+
+    def compute_acc_penalty(self, current_tcp_vel):
         """
         计算抖动惩罚
         
@@ -279,12 +306,10 @@ class JitterPenaltyWrapper(gym.Wrapper):
             vel_diff1 = np.array(current_tcp_vel) - np.array(self.tcp_vel_history[-1])
             pos_diff = np.linalg.norm(vel_diff1[:3]) * 4
             ori_diff = np.linalg.norm(vel_diff1[3:6]) * 0.8
-            print("pos diff is",pos_diff)
-            print("ori diff is",ori_diff)
             if pos_diff > 0.02:  # 阈值可以调整
-                penalty += self.penalty_coef * pos_diff
+                penalty += self.acc_coef* pos_diff
             if ori_diff > 0.02:  # 阈值可以调整
-                penalty += self.penalty_coef * ori_diff
+                penalty += self.acc_coef* ori_diff
         penalty = min(self.max_penalty, penalty)*(-1)
         return penalty
 
@@ -304,14 +329,22 @@ class JitterPenaltyWrapper(gym.Wrapper):
                 current_tcp_vel = np.zeros(6)
         
         # 计算抖动惩罚
-        jitter_penalty = self.compute_jitter_penalty(current_tcp_vel)
+        acc_penalty = self.compute_acc_penalty(current_tcp_vel)
         # rew += jitter_penalty
         self.tcp_vel_history.append(current_tcp_vel.copy())
         # 添加调试信息
-        if "jitter_penalty" not in info:
-            info["jitter_penalty"] = jitter_penalty
-
+        action1 = action.copy()
+        action1[:3] *= 0.01  # 前3个动作缩放0.01
+        action1[3:6] *= 0.05
+        jitter_penalty = self.compute_act_penalty(action1)
+        self.action_history.append(action1)
         
+        # 添加调试信息
+        if "act_penalty" not in info:
+            info["act_penalty"] = jitter_penalty
+        if "acc_penalty" not in info:
+            info["acc_penalty"] = acc_penalty
+
         return observation, rew, terminated, truncated, info
     
     def reset(self, **kwargs):

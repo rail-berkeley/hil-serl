@@ -43,7 +43,9 @@ class ReplayBuffer(Dataset):
         include_next_actions: Optional[bool] = False,
         include_label: Optional[bool] = False,
         include_grasp_penalty: Optional[bool] = False,
-        include_jitter_penalty: Optional[bool] = False,
+        include_acc_penalty: Optional[bool] = False,
+        include_act_penalty: Optional[bool] = False,
+        include_force_penalty: Optional[bool] = False,
     ):
         if next_observation_space is None:
             next_observation_space = observation_space
@@ -69,8 +71,12 @@ class ReplayBuffer(Dataset):
         if include_grasp_penalty:
             dataset_dict['grasp_penalty'] = np.empty((capacity,), dtype=np.float32)
         
-        if include_jitter_penalty:
-            dataset_dict['jitter_penalty'] = np.empty((capacity,), dtype=np.float32)
+        if include_acc_penalty:
+            dataset_dict['acc_penalty'] = np.empty((capacity,), dtype=np.float32)
+        if include_act_penalty:
+            dataset_dict['act_penalty'] = np.empty((capacity,), dtype=np.float32)
+        if include_force_penalty:
+            dataset_dict['force_penalty'] = np.empty((capacity,), dtype=np.float32)
         
         super().__init__(dataset_dict)
 

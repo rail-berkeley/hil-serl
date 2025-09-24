@@ -40,19 +40,19 @@ class RightEnvConfig(DefaultEnvConfig):
     IMAGE_CROP = {
         # "side": lambda img: img[0:480, 120:600],
         #"wrist": lambda img: img[0:400, 130:530],
-        "wrist": lambda img: img[180:330, 350:600],
-        "wrist2": lambda img: img[180:330, 380:650],
+        "wrist": lambda img: img[150:360, 280:620],
+        "wrist2": lambda img: img[150:360, 360:670],
         "side": lambda img: img[600:820,800:1040],
-        "wrist_depth": lambda img: img[180:380, 300:600],
-        "wrist2_depth": lambda img: img[180:380, 300:600],  
+        "wrist_depth": lambda img: img[150:360, 280:620],
+        "wrist2_depth": lambda img: img[150:360, 360:670],
     }
     # cls_keys = ["wrist2"]
     # CLS_CAMERAS = {
     #     "wrist2cls": "/2/camera/color/image_raw", 
     # }
     RESET_POSE = np.array([0.61, -0.031, 0.245, -np.pi, 0.03, np.pi])
-    ABS_POSE_LIMIT_LOW = np.array([0.57, -0.07, 0.209, np.pi-0.05, -0.05, np.pi-0.2])
-    ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.01, 0.255, np.pi, 0.11, np.pi])
+    ABS_POSE_LIMIT_LOW = np.array([0.57, -0.7, 0.209, np.pi-0.05, -0.03, np.pi-0.2])
+    ABS_POSE_LIMIT_HIGH = np.array([0.65, 0.05, 0.255, np.pi, 0.06, np.pi])
     gripper_open = 450   
     gripper_close = 75
 
@@ -134,7 +134,7 @@ class TrainConfig(DefaultTrainingConfig):
     setup_mode = "single-arm-learned-gripper"
 
     def get_environment(self, fake_env=False, save_video=False, classifier=True,sample=False):
-        env = RobotRosEnv    (
+        env = RobotRosEnv(
             hz=5, config=RightEnvConfig(), fake_env=fake_env, save_video=save_video
         )
         if USE_JITTER_PENALTY:

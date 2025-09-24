@@ -220,8 +220,7 @@ def grasp_decrease(env, inverse=False, z_offset=0.03):
     env.robot.send_gripper_command(-1)
 
     # 等待夹爪完全夹紧
-    while env.robot.grip_status != 2:
-        time.sleep(0.1)
+    time.sleep(1)
 
     # 如果 inverse 为 False，才进行正交移动
     if not inverse and z_offset != 0:
@@ -395,7 +394,7 @@ gl_stop_state = None
 gl_sem = None
 gl_stop_learner = True
 gl_listener_thread = None
-init_pos=[[0.44635,-0.23945,0.2248,0,1,0,0],[0.4367,-0.1567,0.1710,0,1,0,0]]
+init_pos=[[0.4397,-0.2374,0.2259,0,1,0,0],[0.4307, -0.15356, 0.17261, 0.0, 1.0, 0.0, 0.0]]
 resetpose=[]
 def main(_):
     signal.signal(signal.SIGINT, handler)
@@ -407,11 +406,6 @@ def main(_):
     checkpoint_paths = FLAGS.checkpoint_path  # List of checkpoint paths
     eval_steps = FLAGS.eval_checkpoint_step  # List of eval steps
 
-    if len(checkpoint_paths) != len(exp_names):
-        raise ValueError("The number of checkpoint paths must match the number of experiment names.")
-    if len(eval_steps) != len(exp_names):
-        raise ValueError("The number of eval steps must match the number of experiment names.")
-
     # Prepare the experiments and configurations
     configs = []
     for exp_name in exp_names:
@@ -420,11 +414,6 @@ def main(_):
         resetpose.append(np.concatenate(
             [config.RESET_POSE[:3], euler_2_quat(config.RESET_POSE[3:])]
         ))
-    # 确保 checkpoint 和 eval_step 数量与 exp_name 数量匹配
-    if len(checkpoint_paths) != len(exp_names):
-        raise ValueError("The number of checkpoint paths must match the number of experiment names.")
-    if len(eval_steps) != len(exp_names):
-        raise ValueError("The number of eval steps must match the number of experiment names.")
 
     # 初始化 RNG
     rng = jax.random.PRNGKey(FLAGS.seed)
@@ -435,43 +424,45 @@ def main(_):
     env = config.get_environment(
         fake_env=FLAGS.learner,
         save_video=FLAGS.save_video,
-        classifier=False,
+        classifier= True,
     )
+    robot = RobotRosInterface(env.config)
+    env.set_robot(robot)
     print(f"env observe space {env.observation_space}")
     print(f"env action space {env.action_space}")
 
     # 创建智能体列表（两个智能体都使用同一个环境）
     agents = []
-    for i, exp_name in enumerate(exp_names):
-        # 获取当前实验的配置
-        current_config = configs[i]
+    # for i, exp_name in enumerate(exp_names):
+    #     # 获取当前实验的配置
+    #     current_config = configs[i]
         
-        # 创建 SAC agent（每个智能体使用同一个环境）
-        agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(
-            seed=FLAGS.seed,
-            sample_obs=env.observation_space.sample(),
-            sample_action=env.action_space.sample(),
-            image_keys=current_config.image_keys,
-            encoder_type=current_config.encoder_type,
-            discount=current_config.discount,
-        )
-        # replicate agent across devices
-        agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
+    #     # 创建 SAC agent（每个智能体使用同一个环境）
+    #     agent: SACAgentHybridSingleArm = make_sac_pixel_agent_hybrid_single_arm(
+    #         seed=FLAGS.seed,
+    #         sample_obs=env.observation_space.sample(),
+    #         sample_action=env.action_space.sample(),
+    #         image_keys=current_config.image_keys,
+    #         encoder_type=current_config.encoder_type,
+    #         discount=current_config.discount,
+    #     )
+    #     # replicate agent across devices
+    #     agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
         
-        # 处理 checkpoint
-        checkpoint_path = checkpoint_paths[i]
-        if checkpoint_path is not None and has_checkpoint_folder(checkpoint_path):
-            input("Checkpoint path already exists. Press Enter to resume training.")
-            ckpt = checkpoints.restore_checkpoint(
-                os.path.abspath(checkpoint_path),
-                agent.state,
-            )
-            agent = agent.replace(state=ckpt)
-            ckpt_number = os.path.basename(
-                checkpoints.latest_checkpoint(os.path.abspath(checkpoint_path))
-            )[11:]
-            print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
-        agents.append(agent)
+    #     # 处理 checkpoint
+    #     checkpoint_path = checkpoint_paths[i]
+    #     if checkpoint_path is not None and has_checkpoint_folder(checkpoint_path):
+    #         input("Checkpoint path already exists. Press Enter to resume training.")
+    #         ckpt = checkpoints.restore_checkpoint(
+    #             os.path.abspath(checkpoint_path),
+    #             agent.state,
+    #         )
+    #         agent = agent.replace(state=ckpt)
+    #         ckpt_number = os.path.basename(
+    #             checkpoints.latest_checkpoint(os.path.abspath(checkpoint_path))
+    #         )[11:]
+    #         print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
+    #     agents.append(agent)
     start_key_listen_thread()
     #run pipleline
     curr_pos=env.robot.curr_ep
@@ -487,11 +478,11 @@ def main(_):
     print(f"move to platte to grasp cable {curr_pos}")
     time.sleep(0.5)
     #move platte
-    actor(
-       agents[0],
-       env,
-       sampling_rng,
-    )
+    # actor(
+    #    agents[0],
+    #    env,
+    #    sampling_rng,
+    # )
     print(f"after plugcable finished lift to {curr_pos}")
     waypoints=gen_waypoints(curr_pos,init_pos[0], movement_config)
     curr_pos=interpolate_move(env,waypoints)
@@ -505,7 +496,7 @@ def main(_):
     waypoints=gen_waypoints(curr_pos,init_pos[1], movement_config)
     curr_pos=interpolate_move(env,waypoints)
     print(f"move to usbbase to grasp usb {curr_pos}")
-    env.update_config(envcfg)
+    # env.update_config(envcfg)
     curr_pos=grasp_decrease(env,z_offset=-0.05)
     waypoints=gen_waypoints(curr_pos,resetpose[1], movement_config)
     curr_pos=interpolate_move(env,waypoints)
@@ -514,11 +505,11 @@ def main(_):
     rng, sampling_rng = jax.random.split(rng)
     time.sleep(0.5)
     #move platte
-    actor(
-       agents[1],
-       env,
-       sampling_rng,
-    )
+    # actor(
+    #    agents[1],
+    #    env,
+    #    sampling_rng,
+    # )
     temp=init_pos[1]
     temp[2]+=0.03
     waypoints=gen_waypoints(curr_pos,temp, movement_config2)

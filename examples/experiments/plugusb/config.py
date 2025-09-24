@@ -19,7 +19,6 @@ from franka_env.envs.wrappers import (
 )
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import Quat2EulerWrapper
-
 USE_FORCE_PENALTY =True
 USE_TIME_PENALTY = True
 USE_JITTER_PENALTY = True
@@ -52,7 +51,7 @@ class RightEnvConfig(DefaultEnvConfig):
     # }
     RESET_POSE = np.array([0.680, 0.222, 0.258, -np.pi, 0.0, 0.5*np.pi])
     ABS_POSE_LIMIT_LOW = np.array([0.60, 0.18, 0.180, np.pi-0.05, -0.02, 0.5*np.pi-0.1])
-    ABS_POSE_LIMIT_HIGH = np.array([0.74, 0.27, 0.288, np.pi, 0.02, 0.5*np.pi+0.1])
+    ABS_POSE_LIMIT_HIGH = np.array([0.74, 0.27, 0.288, np.pi, 0.04, 0.5*np.pi+0.1])
     gripper_open = 450
     gripper_close = 80
 

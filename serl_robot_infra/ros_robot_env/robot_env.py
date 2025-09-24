@@ -101,7 +101,7 @@ class RobotRosEnv(gym.Env):
         config: DefaultEnvConfig = None,
         set_load=False,
     ):
-        self.robot = RobotRosInterface(config)
+        self.robot = None
         self.action_scale = config.ACTION_SCALE
         self._TARGET_POSE = config.TARGET_POSE
         self._RESET_POSE = config.RESET_POSE
@@ -188,7 +188,14 @@ class RobotRosEnv(gym.Env):
         if not fake_env:
             self._init_new_camera_subscriber()
         self.terminate=False
-        # self.robot.reset_robot_force_config()
+        self.curr_path_length = 0
+
+    def set_robot(self, robot):
+        self.robot = robot
+
+    def enable_movement(self, enable):
+        self.control_arm = enable
+
     def update_config(self, config: DefaultEnvConfig):
         """
         Update the environment's config and reassign relevant properties.
@@ -281,9 +288,9 @@ class RobotRosEnv(gym.Env):
                 cliped_pos = self.clip_safety_box(self.nextpos)
                 # print(f"send step action: {cliped_pos}")
                 self.robot.send_pos_command(cliped_pos)
+                self.curr_path_length += 1
         except Exception as e:
             print(f"calculate action error {action}, exception {e}")
-        self.curr_path_length += 1
         dt = time.time() - start_time
         
         time.sleep(max(0, (1.0 / self.hz) - dt-0.03))

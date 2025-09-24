@@ -209,7 +209,7 @@ class SACAgentHybridSingleArm(flax.struct.PyTreeNode):
 
         target_q = (
             batch["rewards"]
-            + self.config["discount"] * batch["masks"] * target_next_min_q+ batch["grasp_penalty"]
+            + self.config["discount"] * batch["masks"] * target_next_min_q+ batch["acc_penalty"]+batch["force_penalty"]
         )
         chex.assert_shape(target_q, (batch_size,))
 

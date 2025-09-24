@@ -27,7 +27,7 @@ from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSing
 from serl_launcher.agents.continuous.sac_hybrid_dual import SACAgentHybridDualArm
 from serl_launcher.utils.timer_utils import Timer
 from serl_launcher.utils.train_utils import concat_batches
-
+from ros_robot_env.ros_robot_interface import RobotRosInterface
 from agentlace.trainer import TrainerServer, TrainerClient
 from agentlace.data.data_store import QueuedDataStore
 
@@ -252,7 +252,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 already_intervened = True
             else:
                 already_intervened = False
-            running_return += reward+info["grasp_penalty"]+info["jitter_penalty"]
+            running_return += reward+info["grasp_penalty"]+info["acc_penalty"]+info["force_penalty"]
             transition = dict(
                 observations=obs,
                 actions=actions,
@@ -265,10 +265,18 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                 transition["grasp_penalty"] = info["grasp_penalty"]
             else:
                 print_green("no grasp_penalty")
-            if "jitter_penalty" in info:
-                transition["jitter_penalty"] = info["jitter_penalty"]
+            if "acc_penalty" in info:
+                transition["acc_penalty"] = info["acc_penalty"]
             else:
-                print_green("no jitter_penalty")
+                print_green("no acc_penalty")
+            if "force_penalty" in info:
+                transition["force_penalty"] = info["force_penalty"]
+            else:
+                print_green("no force_penalty")
+            if "act_penalty" in info:
+                transition["act_penalty"] = info["act_penalty"]
+            else:
+                print_green("no act_penalty")
             data_store.insert(transition)
             transitions.append(copy.deepcopy(transition))
             if already_intervened:
@@ -543,6 +551,9 @@ def main(_):
         save_video=FLAGS.save_video,
         classifier= True,
     )
+    robot = RobotRosInterface(env.config)
+    env.set_robot(robot)
+    env.robot.reset_robot_force_config()
     env = RecordEpisodeStatistics(env)
     print(f"env observe space {env.observation_space}")
     print(f"env action space {env.action_space}")
@@ -620,7 +631,9 @@ def main(_):
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
-            include_jitter_penalty=True,
+            include_acc_penalty=True,
+            include_act_penalty=True,
+            include_force_penalty=True,
         )
         # set up wandb and logging
         wandb_logger = make_wandb_logger(
@@ -646,7 +659,9 @@ def main(_):
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
-            include_jitter_penalty=True,
+            include_acc_penalty=True,
+            include_act_penalty=True,
+            include_force_penalty=True,
         )
 
         # assert FLAGS.demo_path is not None
@@ -656,14 +671,12 @@ def main(_):
                     transitions = pkl.load(f)
                     for transition in transitions:
                         transition = convert_image_format(transition)
-                        if (
-                            "infos" in transition
-                            and "grasp_penalty" in transition["infos"]
-                        ):
-                            transition["grasp_penalty"] = transition["infos"][
-                                "grasp_penalty"
-                            ]
-                            demo_buffer.insert(transition)
+                        if "infos" in transition:
+                            for key in ["grasp_penalty", "act_penalty", "acc_penalty", "force_penalty"]:
+                                if key in transition["infos"]:
+                                    transition[key] = transition["infos"][key]
+
+                        demo_buffer.insert(transition)
         print_green(f"demo buffer size: {len(demo_buffer)}")
         print_green(f"online buffer size: {len(replay_buffer)}")
 

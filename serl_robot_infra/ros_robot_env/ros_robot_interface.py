@@ -95,11 +95,7 @@ class DefaultEnvConfig:
 
 class RobotRosInterface:
     def __init__(self, config):
-        self.config = config
-        self.gripper_sleep = config.GRIPPER_SLEEP
-        self.gripper_open = config.gripper_open
-        self.gripper_close = config.gripper_close
-        self.topic_prefix = config.ARM
+        self.update_config(config)
         self.grip_status = 0
         self.curr_joint = []
         self.curr_end_pos = np.full(7, 0.0, dtype=np.float32)
@@ -109,17 +105,25 @@ class RobotRosInterface:
         self.curr_gripper_pos = [0.0]
         self.wrist_img = {}
         self.cv_bridge = CvBridge()
-        self.rgb_cam_dict = config.CAMERAS
-        self.depth_cam_dict = config.DEPTH_CAMERAS
+
         # self.classifier=config.cls_keys[0]
 
         self.init_pub_sub_node()
         print("Initialized Agilex")
-    
-    
+
+    def update_config(self, config):
+        self.config = config
+        self.gripper_sleep = config.GRIPPER_SLEEP
+        self.gripper_open = config.gripper_open
+        self.gripper_close = config.gripper_close
+        self.topic_prefix = config.ARM
+        self.rgb_cam_dict = config.CAMERAS
+        self.depth_cam_dict = config.DEPTH_CAMERAS
+
     @property
     def curr_ep(self):
         return self.curr_end_pos
+
     def reset_robot_force_config(self):
         try:
             fc_mode = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -136,10 +140,24 @@ class RobotRosInterface:
                 fc_speed = self.config.FORCE_PARAM['fc_speed']
                 gripper_force = self.config.FORCE_PARAM['gripper_force']
             config_force = rospy.ServiceProxy('/set_force_param', ConfigForce)
-            resp = config_force(fc_mode=fc_mode, fc_mass=fc_mass, fc_damping=fc_damping, fc_stiffness=fc_stiffness, fc_speed=fc_speed, gripper_force=gripper_force) 
-            print("Success:", resp.res)
+            resp = config_force(fc_mode=fc_mode, fc_mass=fc_mass, fc_damping=fc_damping, fc_stiffness=fc_stiffness, fc_speed=fc_speed, gripper_force=gripper_force)
+            print("Service call:", resp.res)
         except rospy.ServiceException as e:
             print("Service call failed:", e)
+    def set_force_config(self):
+        try:
+            fc_mode = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            fc_mass = [500, 500, 500, 20, 10, 20]
+            fc_damping = [600, 600, 600, 100, 100, 100]
+            fc_stiffness = [400, 600, 400, 1, 1, 1]
+            fc_speed = [200, 200, 200, 3, 3, 3]
+            gripper_force = 50
+            config_force = rospy.ServiceProxy('/set_force_param', ConfigForce)
+            resp = config_force(fc_mode=fc_mode, fc_mass=fc_mass, fc_damping=fc_damping, fc_stiffness=fc_stiffness, fc_speed=fc_speed, gripper_force=gripper_force)
+            print("Service call:", resp.res)
+        except rospy.ServiceException as e:
+            print("Service call failed:", e)
+        time.sleep(2)
 
     def init_pub_sub_node(self):
         print("Init node")
@@ -186,12 +204,17 @@ class RobotRosInterface:
         self.end_pose_pub = rospy.Publisher(
             self.topic_prefix + "/control_pose", Pose, queue_size=1
         )
+        self.movel_end_pose_pub = rospy.Publisher(
+            self.topic_prefix + "/control_pose_movel", Pose, queue_size=1
+        )
         self.gripper_pub = rospy.Publisher(
             f"{self.topic_prefix}/control_gripper", Float64, queue_size=1
         )
         self.joint_pub = rospy.Publisher(
             self.topic_prefix + "/control_joint", JointState, queue_size=1
         )
+        # Important for update first frame data
+        time.sleep(0.5)
 
     def move_z(self, dz):
         target_pose = copy.deepcopy(self.curr_end_pos)
@@ -247,7 +270,7 @@ class RobotRosInterface:
             if key in self.config.IMAGE_CROP
             else cv_image
         )
-       
+
         resized = cv2.resize(cropped_rgb, (128, 128))
         self.wrist_img[key] = resized
          #TODO(jq): split to cls crop and obs crop
@@ -286,6 +309,18 @@ class RobotRosInterface:
             pose.orientation.w,
         ) = pos[3:]
         self.end_pose_pub.publish(pose)
+
+    def movel(self, pos: np.ndarray):
+        """Internal function to send position command to the robot."""
+        pose = Pose()
+        pose.position.x, pose.position.y, pose.position.z = pos[:3]
+        (
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        ) = pos[3:]
+        self.movel_end_pose_pub.publish(pose)
 
     def send_joint_command(self, joint: np.ndarray):
         joint_state_msg = JointState()
