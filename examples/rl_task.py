@@ -71,16 +71,13 @@ class  RLTask:
         self.robot = robot
         self.robot.update_config(self.env.config)
         self.env.set_robot(robot)
+        self.rule_based_approach_target()
         self.env.enable_movement(False)
         rl_thread = threading.Thread(target=self.finish_target_with_rl)
         rl_thread.start()
-        self.robot.set_force_config()
-        self.rule_based_approach_target()
-        time.sleep(1)
         self.env.enable_movement(True)
-        self.env.reset()
-        time.sleep(1)
         rl_thread.join()
+        time.sleep(1)
         return True
 
     def rule_based_approach_target(self):
@@ -95,6 +92,7 @@ class  RLTask:
         waypoints.append(move_config['point_above_object'])
         waypoints.append(move_config['point_object'])
         self.interpolate_move(waypoints)
+        time.sleep(2.0)
 
         # Grasp object
         self.robot.send_gripper_command(-1.0)
@@ -220,8 +218,10 @@ class  RLTask:
         #print("Finish RL part")
         #time.sleep(5)
         #return True
-        obs, reward, done, truncated, info = self.env.step([0.0]*7)
+        #obs, reward, done, truncated, info = self.env.reset() #step([0.0]*7)
+        obs, _ = self.env.reset()
         self.rng, sampling_rng = jax.random.split(self.rng)
+        reward = 0
         while reward <= 0:
             done=False
             while not done:
@@ -236,7 +236,7 @@ class  RLTask:
             reward=rew
             if reward<=0:
                 self.env.reset()
-        
+
 
     def log_current_pos(self):
         self.finish_task_pos = self.robot.curr_ep
@@ -245,11 +245,11 @@ class  RLTask:
         self.robot.send_gripper_command(1.0)
         time.sleep(0.5)
         target_pos = copy.copy(self.robot.curr_ep)
-        for _ in range(2):
-            target_pos[2] += 0.025
+        for _ in range(1):
+            target_pos[2] += 0.05
             self.robot.movel(target_pos)
-            time.sleep(0.5)
-        
+            time.sleep(2)
+
 
     def reset_object(self):
         move_config = self.config['rule_based_move_config']
@@ -263,6 +263,7 @@ class  RLTask:
         waypoints.append(pose_above_finish_target)
         waypoints.append(self.finish_task_pos)
         self.interpolate_move(waypoints)
+        time.sleep(1.0)
         self.robot.send_gripper_command(-1.0)
         time.sleep(0.5)
 
@@ -279,7 +280,10 @@ class  RLTask:
         above_unplug_pos[2] += 0.05
         waypoints.append(above_unplug_pos)
         waypoints.append(move_config['point_above_object'])
+        insert_point = copy.copy(move_config['point_object'])
+        insert_point[2] -= 0.005
         waypoints.append(move_config['point_object'])
         self.interpolate_move(waypoints)
+        time.sleep(1)
         self.robot.send_gripper_command(1.0)
         self.move_arm_to_safe_pos()

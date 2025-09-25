@@ -105,8 +105,14 @@ class RobotRosInterface:
         self.curr_gripper_pos = [0.0]
         self.wrist_img = {}
         self.cv_bridge = CvBridge()
+        self.display_image = True
 
         # self.classifier=config.cls_keys[0]
+        self.img_queue = queue.Queue(maxsize=1)
+        self.dis_images = {}
+        if self.display_image:
+            self.displayer = ImageDisplayer(self.img_queue, "visualizer")
+            self.displayer.start()
 
         self.init_pub_sub_node()
         print("Initialized Agilex")
@@ -145,6 +151,7 @@ class RobotRosInterface:
         except rospy.ServiceException as e:
             print("Service call failed:", e)
     def set_force_config(self):
+        return
         try:
             fc_mode = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             fc_mass = [500, 500, 500, 20, 10, 20]
@@ -371,4 +378,16 @@ class RobotRosInterface:
             "tcp_torque": self.curr_force[3:],
             "grip_status": self.grip_status,
         }
+        if self.display_image:
+            display_key = ['wrist', 'wrist2','side']
+            dis_images = {}
+            for key in display_key:
+                if key in self.wrist_img.keys():
+                    dis_images[key] = self.wrist_img[key]
+            if not self.img_queue.empty():
+                try:
+                    self.img_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            self.img_queue.put(dis_images)
         return copy.deepcopy(dict(images=self.wrist_img, state=state_observation))

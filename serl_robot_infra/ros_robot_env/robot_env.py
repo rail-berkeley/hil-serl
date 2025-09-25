@@ -26,36 +26,6 @@ from scipy.spatial.transform import Rotation as R
 from scipy.interpolate import interp1d
 
 
-
-class ImageDisplayer(threading.Thread):
-    def __init__(self, queue, name):
-        threading.Thread.__init__(self)
-        self.queue = queue
-        self.daemon = True  # make this a daemon thread
-        self.name = name
-
-    def run(self):
-        while True:
-            img_array = self.queue.get()  # retrieve an image from the queue
-            if img_array is None:  # None is our signal to exit
-                time.sleep(0.01)
-                continue
-
-            frame = np.concatenate(
-                [
-                    cv2.resize(v, (256, 256))
-                    for k, v in img_array.items()
-                    if "full" not in k
-                ],
-                axis=1,
-            )
-            cv2.imshow(self.name, frame)
-            cv2.waitKey(1)
-
-
-##############################################################################
-
-
 class DefaultEnvConfig:
     """Default configuration for FrankaEnv. Fill in the values below."""
 
@@ -156,7 +126,7 @@ class RobotRosEnv(gym.Env):
                         "gripper_pose": gym.spaces.Box(-1, 1, shape=(1,)),
                         "tcp_force": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
                         "tcp_torque": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
-                        "grip_status": gym.spaces.Discrete(4), 
+                        "grip_status": gym.spaces.Discrete(4),
                     }
                 ),
                 "images": gym.spaces.Dict(
@@ -169,15 +139,9 @@ class RobotRosEnv(gym.Env):
         )
         self.cycle_count = 0
         if not fake_env:
-            self.img_queue = queue.Queue(maxsize=1)
-            self.dis_images = {}
-            if self.display_image:
-                self.displayer = ImageDisplayer(self.img_queue, "visualizer")
-                self.displayer.start()
             self.control_arm = True
         if fake_env:
             return
-        self.display_img_id = 0
 
         # 初始化用于新相机的变量
         self.new_camera_image = None
@@ -237,7 +201,7 @@ class RobotRosEnv(gym.Env):
             pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
         )
 
-        
+
         euler = R.from_quat(pose[3:]).as_euler("xyz")
         if any(np.abs(euler) > np.pi):
            print(f"big euler {euler}")
@@ -270,7 +234,7 @@ class RobotRosEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         self.nextpos = self.robot.curr_end_pos.copy()
-        
+
         try:
             action = np.clip(action, -1.0, 1.0)
             xyz_delta = action[:3]
@@ -292,7 +256,7 @@ class RobotRosEnv(gym.Env):
         except Exception as e:
             print(f"calculate action error {action}, exception {e}")
         dt = time.time() - start_time
-        
+
         time.sleep(max(0, (1.0 / self.hz) - dt-0.03))
         ob = self._get_obs()
         reward = self.compute_reward(ob)
@@ -325,16 +289,16 @@ class RobotRosEnv(gym.Env):
 
     #     steps = int(timeout * self.hz)
     #     t = np.linspace(0, 1, steps)
-        
+
     #     # 位置插值
     #     pos_traj = interp1d(np.linspace(0, 1, len(waypoints)), waypoints[:, :3], kind='cubic', axis=0)(t)
-        
+
     #     # 旋转插值 - 使用正确的scipy R方法
     #     Rs = R.from_quat(waypoints[:, 3:])
-        
+
     #     for i in range(steps):
     #         pos = pos_traj[i]
-            
+
     #         # 使用R类的Slerp方法
     #         if len(Rs) == 1:
     #             rot = Rs[0]
@@ -343,11 +307,11 @@ class RobotRosEnv(gym.Env):
     #             key_times = np.linspace(0, 1, len(Rs))
     #             slerps = Slerp(key_times, Rs)
     #             rot = slerps(t[i])
-            
+
     #         self.robot.send_pos_command(np.concatenate([pos, rot.as_quat()]))
     #         time.sleep(1/self.hz)
 
-    
+
     def interpolate_move(self, waypoints, timeout=2.0,min_segment_time=0.5):
         """
         多关键点平滑插值运动（纯归一化时间轴 + 权重分配）
@@ -365,7 +329,7 @@ class RobotRosEnv(gym.Env):
             # 平移距离 (米)
             delta_pos = np.linalg.norm(waypoints[i+1, :3] - waypoints[i, :3])
             segment_distances.append(delta_pos)
-            
+
             # 旋转角度 (弧度)
             dot = np.dot(waypoints[i, 3:], waypoints[i+1, 3:])
             dot = np.clip(dot, -1.0, 1.0)
@@ -377,7 +341,7 @@ class RobotRosEnv(gym.Env):
         max((d * 10) + (a * 2), min_segment_time)
         for d, a in zip(segment_distances, segment_angles)]
         total_time= sum(segment_time)
-        
+
         # 生成归一化的时间轴 [0, ..., 1]
         key_times = np.cumsum([0] + segment_time) / total_time
 
@@ -406,8 +370,8 @@ class RobotRosEnv(gym.Env):
         print("===============\n")
         for t in t_eval:
             pos = pos_interpolator(t)      # 位置插值
-            rot = slerp(t)    
-            print(f"t: {t}, pos: {pos}, euler: {rot.as_euler('xyz')}")            
+            rot = slerp(t)
+            print(f"t: {t}, pos: {pos}, euler: {rot.as_euler('xyz')}")
             self.robot.send_pos_command(np.concatenate([pos, rot.as_quat()]))
             time.sleep(1 / self.hz)
     def cal_timeout(self,curr, reset):
@@ -423,7 +387,7 @@ class RobotRosEnv(gym.Env):
         else:
             dot_adjusted = dot_original
 
-        reset[3:] = q_reset.tolist()   
+        reset[3:] = q_reset.tolist()
         # 计算角度差
         dot_adjusted = np.clip(dot_adjusted, -1.0, 1.0)   # 确保在[-1,1]内
         theta = 2 * np.arccos(dot_adjusted)
@@ -439,7 +403,7 @@ class RobotRosEnv(gym.Env):
             self.robot.send_joint_command(self.RESET_JOINT_POSITIONS)
             time.sleep(2.0)
             return
-        
+
         current_pose = self.robot.curr_end_pos.copy()
         print("current_pose",current_pose)
         reset_pose = self._RESET_POSE.copy()
@@ -467,14 +431,14 @@ class RobotRosEnv(gym.Env):
             waypoints = [
                 current_pose,
                 np.concatenate([
-                    [current_pose[0], current_pose[1], current_pose[2]], 
+                    [current_pose[0], current_pose[1], current_pose[2]],
                     R.from_euler('xyz', [roll, target_pitch, yaw]).as_quat()
                 ]),
                 np.concatenate([
                     back_pose[:3],
                     R.from_euler('xyz', [roll, target_pitch, yaw]).as_quat()
                 ]),
-                
+
                 # 第二步：调整z坐标（保持x,y和调整后的姿态不变）
                 np.concatenate([
                     [back_pose[0], back_pose[1], reset_pose[2]],
@@ -494,20 +458,20 @@ class RobotRosEnv(gym.Env):
             waypoints = [
             current_pose,
             np.concatenate([
-                [current_pose[0], current_pose[1], current_pose[2]], 
+                [current_pose[0], current_pose[1], current_pose[2]],
                 R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
             np.concatenate([
                 back_pose[:3],
                 R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
-              
+
             # 第二步：调整z坐标（保持x,y和调整后的姿态不变）
             np.concatenate([
                 [back_pose[0], back_pose[1], reset_pose[2]],
                 R.from_euler('xyz', [target_roll, target_pitch, yaw]).as_quat()
             ]),
-            
+
             # 第三步：完整调整到reset姿态
             reset_pose
         ]
@@ -576,18 +540,6 @@ class RobotRosEnv(gym.Env):
 
     def _get_obs(self) -> dict:
         obs = self.robot.get_obs()
-        if self.display_image:
-            display_key = ['wrist', 'wrist2','side']
-            dis_images = {}
-            for key in display_key:
-                if key in obs['images'].keys():
-                    dis_images[key] = obs['images'][key]
-            if not self.img_queue.empty():
-                try:
-                    self.img_queue.get_nowait()
-                except queue.Empty:
-                    pass
-            self.img_queue.put(dis_images)
         return obs
 
     def _init_new_camera_subscriber(self):

@@ -56,7 +56,7 @@ class RightEnvConfig(DefaultEnvConfig):
     gripper_close = 80
 
     RANDOM_RESET = True
-    RANDOM_XY_RANGE = 0.01
+    RANDOM_XY_RANGE = 0.02
     RANDOM_RZ_RANGE = 0.02
     ACTION_SCALE = (0.01, 0.05, 1)
     DISPLAY_IMAGE = True
