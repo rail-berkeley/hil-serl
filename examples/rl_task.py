@@ -17,7 +17,7 @@ from scipy.spatial.transform import Rotation as R
 from experiments.mappings import CONFIG_MAPPING
 from serl_launcher.agents.continuous.sac_hybrid_single import SACAgentHybridSingleArm
 from serl_launcher.utils.launcher import make_sac_pixel_agent_hybrid_single_arm
-
+from franka_env.utils.transformations import calculate_offset_toolcoordinate
 
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
@@ -71,10 +71,11 @@ class  RLTask:
         self.robot = robot
         self.robot.update_config(self.env.config)
         self.env.set_robot(robot)
-        self.rule_based_approach_target()
         self.env.enable_movement(False)
         rl_thread = threading.Thread(target=self.finish_target_with_rl)
         rl_thread.start()
+        self.rule_based_approach_target()
+        self.env.reset()
         self.env.enable_movement(True)
         rl_thread.join()
         time.sleep(1)
@@ -88,21 +89,33 @@ class  RLTask:
         waypoints = []
         curr_pos = self.robot.curr_ep
         move_config = self.config['rule_based_move_config']
-        waypoints.append(curr_pos)
+        #waypoints.append(curr_pos)
         waypoints.append(move_config['point_above_object'])
         waypoints.append(move_config['point_object'])
-        self.interpolate_move(waypoints)
-        time.sleep(2.0)
+        #self.interpolate_move(waypoints)
+        self.move_waypoints(waypoints)
+        time.sleep(1.0)
 
         # Grasp object
         self.robot.send_gripper_command(-1.0)
         time.sleep(1.0)
         waypoints.clear()
         curr_pos = self.robot.curr_ep
-        waypoints.append(curr_pos)
+        #waypoints.append(curr_pos)
         waypoints.append(move_config['point_above_object'])
         waypoints.append(move_config['point_above_target'])
-        self.interpolate_move(waypoints)
+        #self.interpolate_move(waypoints)
+        self.move_waypoints(waypoints)
+        time.sleep(1.0)
+
+    def move_waypoints(self, waypoints):
+        for waypoint in waypoints:
+            pos_diff = np.linalg.norm(self.robot.curr_ep-waypoint)
+            while pos_diff > 0.001:
+                self.robot.movel(waypoint)
+                time.sleep(0.8)
+                pos_diff = np.linalg.norm(self.robot.curr_ep[:3]-waypoint[:3])
+                print(f"pos_diff: {pos_diff}, curr {self.robot.curr_ep}, target {waypoint}")
 
     def interpolate_move(self, waypoints, timeout=2.0,min_segment_time=0.5):
             """
@@ -152,10 +165,15 @@ class  RLTask:
             for t in t_eval:
                 pos = pos_interpolator(t)    # 位置插值
                 rot = slerp(t)
-                print("pos",pos)
+                # print("pos",pos)
                 self.robot.movel(np.concatenate([pos, rot.as_quat()]))
                 time.sleep(0.7)
-            time.sleep(1)
+            pos_diff = np.linalg.norm(self.robot.curr_ep-waypoints[-1])
+            while pos_diff > 0.001:
+                self.robot.movel(waypoints[-1])
+                time.sleep(0.2)
+                pos_diff = np.linalg.norm(self.robot.curr_ep[:3]-waypoints[-1][:3])
+                print(f"pos_diff: {pos_diff}, curr {self.robot.curr_ep}, target {waypoints[-1]}")
             # self.robot.reset_robot_force_config()
 
     def transto_same_hemisphere(self, waypoints: np.ndarray) -> np.ndarray:
@@ -202,9 +220,8 @@ class  RLTask:
         dot_adjusted = np.clip(dot_adjusted, -1.0, 1.0)   # 确保在[-1,1]内
         theta = 2 * np.arccos(dot_adjusted)
         delta=np.linalg.norm(curr[:3]-goal[:3])
-        print(f"theta: {theta}, delta: {delta}")
+        # print(f"theta: {theta}, delta: {delta}")
         timeout = theta*3+delta*15
-        print(f"timeout: {timeout}")
         return np.max((timeout,2),axis=0)
 
     def finish_target_with_rl(self):
@@ -218,20 +235,25 @@ class  RLTask:
         #print("Finish RL part")
         #time.sleep(5)
         #return True
-        #obs, reward, done, truncated, info = self.env.reset() #step([0.0]*7)
-        obs, _ = self.env.reset()
+        obs, reward, done, truncated, info = self.env.step([0.0]*7)
+        #obs, _ = self.env.reset()
         self.rng, sampling_rng = jax.random.split(self.rng)
         reward = 0
         while reward <= 0:
             done=False
             while not done:
                 sampling_rng, key = jax.random.split(sampling_rng)
+                t1=time.time()
                 actions, _ = self.agent.sample_actions(
                     observations=jax.device_put(obs), argmax=True, seed=key
                 )
+                t2=time.time()
+                print(f"sample time: {t2-t1}")
                 actions = np.asarray(jax.device_get(actions))
 
                 next_obs, rew, done, truncated, info = self.env.step(actions)
+                t3=time.time()
+                print(f"step time: {t3-t1}")
                 obs = next_obs
             reward=rew
             if reward<=0:
@@ -244,11 +266,14 @@ class  RLTask:
     def move_arm_to_safe_pos(self):
         self.robot.send_gripper_command(1.0)
         time.sleep(0.5)
-        target_pos = copy.copy(self.robot.curr_ep)
-        for _ in range(1):
-            target_pos[2] += 0.05
+        target_pos=calculate_offset_toolcoordinate(self.robot.curr_ep,x_offset=0,y_offset=0,z_offset=-0.03)
+        pos_diff = np.linalg.norm(self.robot.curr_ep[:3]-target_pos[:3])
+        while pos_diff > 0.005:
             self.robot.movel(target_pos)
-            time.sleep(2)
+            time.sleep(0.2)
+            pos_diff = np.linalg.norm(self.robot.curr_ep[:3]-target_pos[:3])
+            print(f"pos_diff: {pos_diff}, curr {self.robot.curr_ep}, target {target_pos}")
+
 
 
     def reset_object(self):
@@ -262,7 +287,8 @@ class  RLTask:
         pose_above_finish_target[2] += 0.05
         waypoints.append(pose_above_finish_target)
         waypoints.append(self.finish_task_pos)
-        self.interpolate_move(waypoints)
+        #self.interpolate_move(waypoints)
+        self.move_waypoints(waypoints)
         time.sleep(1.0)
         self.robot.send_gripper_command(-1.0)
         time.sleep(0.5)
@@ -283,7 +309,8 @@ class  RLTask:
         insert_point = copy.copy(move_config['point_object'])
         insert_point[2] -= 0.005
         waypoints.append(move_config['point_object'])
-        self.interpolate_move(waypoints)
+        #self.interpolate_move(waypoints)
+        self.move_waypoints(waypoints)
         time.sleep(1)
         self.robot.send_gripper_command(1.0)
         self.move_arm_to_safe_pos()

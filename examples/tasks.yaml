@@ -5,7 +5,7 @@ tasks:
       checkpoint_step: 43000
       rule_based_move_config:
           point_above_object: [0.445, -0.239, 0.23, 0.0, 1.0, 0.0, 0.0]
-          point_object: [0.455, -0.2336, 0.19576, 0.0, 1.0, 0.0, 0.0]
+          point_object: [0.4445, -0.2386, 0.19576, 0.0, 1.0, 0.0, 0.0]
           point_above_target: [0.61, -0.031, 0.245, 0.0, 1.0, 0.0, 0.0]
           unplug_offset: [0.0, 0.00, 0.03]
 
@@ -14,7 +14,7 @@ tasks:
       checkpoint_step: 6000
       rule_based_move_config:
          point_above_object: [0.435, -0.154, 0.255, 0.0, 1.0, 0.0, 0.0]
-         point_object: [0.4417, -0.1580, 0.1735, 0.0, 1.0, 0.0, 0.0]
+         point_object: [0.438, -0.153, 0.1933, 0.0, 1.0, 0.0, 0.0]
          point_above_target: [0.680, 0.222, 0.258, -0.7, -0.712, -0.004, 0.009]
          unplug_offset: [0.0, 0.03, 0.0]
     # - task_name: "small_model_test"
