@@ -301,7 +301,7 @@ class  RLTask:
         self.robot.movel(unplug_pos)
 
         waypoints = []
-        waypoints.append(unplug_pos)
+        #waypoints.append(unplug_pos)
         above_unplug_pos = copy.copy(unplug_pos)
         above_unplug_pos[2] += 0.05
         waypoints.append(above_unplug_pos)
