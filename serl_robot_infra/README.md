@@ -10,7 +10,7 @@ There is a Flask server which sends commands to the robot via ROS. There is a gy
 
 ### Installation
 
-1. Install `libfranka` and `franka_ros` with instructions [here](https://frankaemika.github.io/docs/requirements.html).
+1. Install `libfranka` and `franka_ros` with instructions [here](https://frankarobotics.github.io/docs/installation_linux.html).
 
 2. Then install the `serl_franka_controllers` from https://github.com/rail-berkeley/serl_franka_controllers
 
