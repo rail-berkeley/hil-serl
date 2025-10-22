@@ -5,6 +5,7 @@ import gymnasium as gym
 import cv2
 import copy
 from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Slerp
 import time
 import requests
 import queue
@@ -289,8 +290,16 @@ class FrankaEnv(gym.Env):
             goal = np.concatenate([goal[:3], euler_2_quat(goal[3:])])
         steps = int(timeout * self.hz)
         self._update_currpos()
+        key_times = [0, 1]
+        key_rots = Rotation.from_quat([self.currpos[3:], goal[3:]])
+        slerp = Slerp(key_times, key_rots)
+        steps = int(timeout * self.hz)
+        interpolate_times = np.linspace(0, 1, steps)
+        path_slerp = slerp(interpolate_times)
+        path_slerp = [rot.as_quat() for rot in path_slerp]
         path = np.linspace(self.currpos, goal, steps)
-        for p in path:
+        for idx, p in enumerate(path):
+            p[3:] = path_slerp[idx]
             self._send_pos_command(p)
             time.sleep(1 / self.hz)
         self.nextpos = p
