@@ -31,4 +31,4 @@ class RemapWrapper(gym.ObservationWrapper):
             raise TypeError(f"Unsupported type {type(new_structure)}")
 
     def observation(self, observation):
-        return jax.tree_map(lambda x: observation[x], self.new_structure)
+        return jax.tree_util.tree_map(lambda x: observation[x], self.new_structure)

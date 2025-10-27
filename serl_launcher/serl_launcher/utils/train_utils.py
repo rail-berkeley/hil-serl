@@ -9,7 +9,7 @@ import imageio
 import jax
 import jax.numpy as jnp
 import numpy as np
-import tensorflow as tf
+# import tensorflow as tf
 import wandb
 from flax.core import frozen_dict
 from flax.training import checkpoints
@@ -68,7 +68,7 @@ def concat_batches(offline_batch, online_batch, axis=1):
 def load_recorded_video(
     video_path: str,
 ):
-    with tf.io.gfile.GFile(video_path, "rb") as f:
+    with open(video_path, "rb") as f:
         video = np.array(imageio.mimread(f, "MP4")).transpose((0, 3, 1, 2))
         assert video.shape[1] == 3, "Numpy array should be (T, C, H, W)"
 
@@ -142,7 +142,7 @@ def load_resnet10_params(agent, image_keys=("image",), public=True):
         with open(file_path, "rb") as f:
             encoder_params = pkl.load(f)
 
-    param_count = sum(x.size for x in jax.tree_leaves(encoder_params))
+    param_count = sum(x.size for x in jax.tree_util.tree_leaves(encoder_params))
     print(
         f"Loaded {param_count/1e6}M parameters from ResNet-10 pretrained on ImageNet-1K"
     )

@@ -13,8 +13,8 @@ class RobotiqGripperServer(GripperServer):
             [
                 "rosrun",
                 "robotiq_2f_gripper_control",
-                "Robotiq2FGripperTcpNode.py",
-                gripper_ip,
+                "Robotiq2FGripperRtuNode.py",
+                "/dev/ttyUSB0",
             ],
             stdout=subprocess.PIPE,
         )

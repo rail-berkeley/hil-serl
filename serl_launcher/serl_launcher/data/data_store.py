@@ -7,6 +7,7 @@ from serl_launcher.data.replay_buffer import ReplayBuffer
 from serl_launcher.data.memory_efficient_replay_buffer import (
     MemoryEfficientReplayBuffer,
 )
+from serl_launcher.data.preference_buffer import PreferenceBuffer
 
 from agentlace.data.data_store import DataStoreBase
 
@@ -40,6 +41,36 @@ class ReplayBufferDataStore(ReplayBuffer, DataStoreBase):
     def get_latest_data(self, from_id: int):
         raise NotImplementedError  # TODO
 
+class PreferenceBufferDataStore(PreferenceBuffer, DataStoreBase):
+    def __init__(
+        self,
+        pre_obs_space: gym.Space,
+        post_obs_space: gym.Space,
+        a_pi_space: gym.Space,
+        a_exp_space: gym.Space,
+        capacity: int,
+    ):
+        PreferenceBuffer.__init__(self, pre_obs_space, post_obs_space, a_pi_space, a_exp_space, capacity)
+        DataStoreBase.__init__(self, capacity)
+        self._lock = Lock()
+
+    # ensure thread safety
+    def insert(self, *args, **kwargs):
+        with self._lock:
+            super(PreferenceBufferDataStore, self).insert(*args, **kwargs)
+
+    # ensure thread safety
+    def sample(self, *args, **kwargs):
+        with self._lock:
+            return super(PreferenceBufferDataStore, self).sample(*args, **kwargs)
+
+    # NOTE: method for DataStoreBase
+    def latest_data_id(self):
+        return self._insert_index
+
+    # NOTE: method for DataStoreBase
+    def get_latest_data(self, from_id: int):
+        raise NotImplementedError  # TODO
 
 class MemoryEfficientReplayBufferDataStore(MemoryEfficientReplayBuffer, DataStoreBase):
     def __init__(

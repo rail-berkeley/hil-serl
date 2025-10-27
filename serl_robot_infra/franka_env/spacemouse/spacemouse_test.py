@@ -17,6 +17,7 @@ def test_spacemouse():
         while True:
             action, buttons = spacemouse0.get_action()
             print(f"Spacemouse action: {action}, buttons: {buttons}")
+            print(f"Norm: {np.linalg.norm(action)}")
             time.sleep(0.1)
 
 
