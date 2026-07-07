@@ -1,0 +1,35 @@
+[project]
+name = "hil-serl-workspace"
+version = "0.1.0"
+description = "Workspace for Human-in-the-Loop Reinforcement Learning"
+requires-python = ">=3.10, <3.11"
+dependencies = [
+    "serl-launcher",
+    "serl-robot-infra",
+]
+
+[build-system]
+requires = ["setuptools>=64.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Define the local package subdirectories so uv links them as editable dependencies
+[tool.uv.workspace]
+members = [
+    "serl_launcher",
+    "serl_robot_infra"
+]
+
+# Configure JAX CUDA wheel indexing directly so uv knows where to look
+[[tool.uv.index]]
+name = "jax-cuda"
+url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+explicit = true
+
+# Direct uv to download specific JAX packages from the custom index
+[[tool.uv.package-index-flag]]
+package = "jax"
+index = "jax-cuda"
+
+[[tool.uv.package-index-flag]]
+package = "jaxlib"
+index = "jax-cuda"

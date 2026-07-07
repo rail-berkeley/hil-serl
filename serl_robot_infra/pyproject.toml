@@ -1,0 +1,11 @@
+[project]
+name = "serl-robot-infra"
+version = "0.1.0"
+dependencies = [
+    "flask",
+    "gymnasium",
+]
+
+[build-system]
+requires = ["setuptools>=64.0.0"]
+build-backend = "setuptools.build_meta"
