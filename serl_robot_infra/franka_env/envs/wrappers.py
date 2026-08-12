@@ -4,10 +4,10 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import Box
 import copy
-from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert
+from serl_robot_infra.franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert
 import requests
 from scipy.spatial.transform import Rotation as R
-from franka_env.envs.franka_env import FrankaEnv
+from serl_robot_infra.franka_env.envs.franka_env import FrankaEnv
 from typing import List
 
 sigmoid = lambda x: 1 / (1 + np.exp(-x))

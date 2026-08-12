@@ -1,2 +1,2 @@
-from franka_env.envs.franka_env import FrankaEnv, DefaultEnvConfig
-from franka_env.envs.franka_wrench_env import FrankaWrenchEnv
+from serl_robot_infra.franka_env.envs.franka_env import FrankaEnv, DefaultEnvConfig
+from serl_robot_infra.franka_env.envs.franka_wrench_env import FrankaWrenchEnv

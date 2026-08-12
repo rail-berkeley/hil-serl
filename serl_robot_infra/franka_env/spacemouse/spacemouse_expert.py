@@ -1,6 +1,6 @@
 import multiprocessing
 import numpy as np
-from franka_env.spacemouse import pyspacemouse
+from serl_robot_infra.franka_env.spacemouse import pyspacemouse
 from typing import Tuple
 
 
